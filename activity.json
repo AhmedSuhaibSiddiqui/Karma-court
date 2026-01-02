@@ -1,0 +1,27 @@
+{
+  "//": "This file configures how your Activity looks in the Discord launcher.",
+  "schema_version": 1,
+  "id": "1262230540863049840", 
+  "name": "Karma Court",
+  "description": "Settle Discord beef in a high-tech cyberpunk mock trial. Guilty or Innocent? You decide.",
+  "tags": ["Social", "Game", "Multiplayer", "Fun", "Roleplay"],
+  
+  "//": "--- VISUALS ---",
+  "//": "The main image shown before launch (like the Poker Night table)",
+  "splash": {
+    "image": "/assets/splash.png"
+  },
+  
+  "//": "The image shown when the user hovers over the splash area",
+  "splash_hover": {
+    "image": "/assets/activate.png"
+  },
+
+  "//": "--- CONFIGURATION ---",
+  "supported_platforms": ["web", "android", "ios"],
+  "default_orientation": "portrait", 
+  "pwa_manifest_path": "/manifest.json",
+  "url_mapping": {
+    "/": "/index.html"
+  }
+}

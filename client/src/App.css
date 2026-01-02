@@ -1,0 +1,91 @@
+/* client/src/App.css */
+
+/* 1. Global Reset & Background */
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #0f172a; /* Dark Navy */
+  color: white;
+  font-family: 'Courier New', Courier, monospace; /* Hacker Font */
+  overflow: hidden; /* No scrollbars in Discord */
+}
+
+/* 2. The Container (Centers everything) */
+.app-container {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  box-sizing: border-box;
+  background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+}
+
+/* 3. Error Screen Styles */
+.error-title {
+  font-size: 2rem;
+  color: #ef4444; /* Neon Red */
+  text-transform: uppercase;
+  margin-bottom: 15px;
+  text-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+  letter-spacing: 2px;
+}
+
+.error-message {
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  color: #fca5a5;
+}
+
+.error-hint {
+  color: #94a3b8; /* Greyish blue */
+  font-size: 0.9rem;
+  max-width: 450px;
+  line-height: 1.5;
+  border-top: 1px solid #334155;
+  padding-top: 15px;
+}
+
+/* 4. Loading Screen Styles */
+.loading-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 6px solid #1e293b; /* Dark grey track */
+  border-top: 6px solid #3b82f6; /* Blue spinner */
+  border-right: 6px solid #ef4444; /* Red accent */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+.loading-text {
+  margin-top: 25px;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #fff;
+  animation: pulse 1.5s ease-in-out infinite;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+/* Animations */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; text-shadow: 0 0 10px white; }
+  50% { opacity: 0.5; text-shadow: none; }
+}

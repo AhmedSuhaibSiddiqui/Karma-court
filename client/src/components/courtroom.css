@@ -1,0 +1,770 @@
+/* client/src/components/Courtroom.css */
+
+/* --- 1. Global Container (The Cyber-Stage) --- */
+.courtroom-container {
+  height: 100vh;
+  width: 100vw;
+  background-color: #050505;
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  padding: 10px;
+  position: relative;
+  
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+
+  /* Cyber Grid Background */
+  background-image: 
+    linear-gradient(rgba(59, 130, 246, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.05) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, #0f172a 0%, #000000 100%);
+  background-size: 40px 40px, 40px 40px, 100% 100%;
+  background-position: center;
+}
+
+/* Vignette & Scanlines */
+.courtroom-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(circle, transparent 50%, #000 120%),
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.2) 3px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Floating Particles (Pseudo-element approximation) */
+.courtroom-container::before {
+  content: "";
+  position: absolute;
+  width: 100%; height: 100%;
+  background-image: radial-gradient(white 1px, transparent 0);
+  background-size: 50px 50px;
+  opacity: 0.1;
+  animation: floatParticles 20s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes floatParticles {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50px); }
+}
+
+/* --- 2. The Holographic Header --- */
+.court-header {
+  z-index: 10;
+  text-align: center;
+  width: 100%;
+  max-width: 500px;
+  margin-top: 10px;
+  perspective: 1000px;
+}
+
+.warning-wrapper {
+  display: inline-block;
+  padding: 6px 20px;
+  margin-bottom: 12px;
+  border-radius: 9999px;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  box-shadow: 0 0 15px rgba(220, 38, 38, 0.2);
+  animation: pulseWarning 2s infinite ease-in-out;
+}
+
+.warning-text {
+  color: #f87171;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  font-size: 0.75rem;
+  margin: 0;
+  text-shadow: 0 0 10px rgba(248, 113, 113, 0.5);
+}
+
+@keyframes pulseWarning {
+  0%, 100% { box-shadow: 0 0 15px rgba(220, 38, 38, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(220, 38, 38, 0.5); }
+}
+
+/* Glass Case File */
+.crime-card {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 4px solid #f59e0b; /* Amber accent for "Case" */
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease;
+}
+
+.crime-card:hover {
+  transform: translateY(-2px);
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.crime-label {
+  color: #94a3b8;
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.crime-label::before, .crime-label::after {
+  content: "";
+  height: 1px;
+  width: 20px;
+  background: #475569;
+}
+
+.crime-input {
+  background: transparent;
+  border: none;
+  color: #f1f5f9;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 1.1rem;
+  font-weight: 600;
+  width: 100%;
+  text-align: center;
+  outline: none;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed rgba(255,255,255,0.1);
+  transition: border-color 0.3s;
+}
+
+.crime-input:focus {
+  border-bottom-color: #f59e0b;
+}
+
+/* --- 3. The Dock (Avatar) --- */
+.dock-area {
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+}
+
+.avatar-container {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 15px;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.avatar-container:hover {
+  transform: scale(1.05);
+}
+
+.avatar-image {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  object-fit: cover;
+  z-index: 5;
+  box-shadow: 0 0 30px rgba(0,0,0,0.5);
+}
+
+/* High-Tech Rings */
+.scan-ring-1 {
+  position: absolute;
+  width: 140px; height: 140px;
+  border: 2px solid;
+  border-radius: 50%;
+  animation: spin 8s linear infinite;
+  transition: all 0.5s ease;
+}
+
+.ring-guilty {
+  border-color: #ef4444; /* RED */
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+}
+
+.ring-innocent {
+  border-color: #3b82f6; /* BLUE */
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+}
+
+/* NEUTRAL: Dual Color Gradient Border Effect */
+.ring-neutral {
+  border: 2px solid transparent;
+  background-image: linear-gradient(#050505, #050505), 
+                    linear-gradient(to right, #ef4444, #3b82f6);
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+
+.scan-ring-2 {
+  position: absolute;
+  width: 125px; height: 125px;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  animation: spin 20s linear infinite reverse;
+}
+
+.accused-name {
+  font-size: 2rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.5px;
+  margin: 0;
+  background: linear-gradient(180deg, #fff 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+
+.status-badge {
+  margin-top: 10px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.05);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  box-shadow: 0 0 15px rgba(251, 191, 36, 0.05);
+}
+
+/* --- 4. Footer & Scoreboard --- */
+.footer-area {
+  z-index: 10;
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.scoreboard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0,0,0,0.2);
+  border-radius: 16px;
+  padding: 10px 25px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.score-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.score-number {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  font-feature-settings: "tnum";
+}
+
+.score-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+.red-team { color: #f87171; text-shadow: 0 0 20px rgba(248, 113, 113, 0.3); }
+.blue-team { color: #60a5fa; text-shadow: 0 0 20px rgba(96, 165, 250, 0.3); }
+
+.vs-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: #475569;
+  background: #0f172a;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  border: 1px solid #1e293b;
+}
+
+/* Tactile Buttons */
+.button-row {
+  display: flex;
+  gap: 12px;
+  height: 60px;
+}
+
+.vote-btn {
+  flex: 1;
+  border: none;
+  border-radius: 14px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: white;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.15s ease;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Internal Shine/Highlight */
+.vote-btn::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 50%;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.1), transparent);
+  pointer-events: none;
+}
+
+.vote-btn:active {
+  transform: translateY(3px);
+  filter: brightness(0.9);
+}
+
+.btn-guilty {
+  background: linear-gradient(to bottom, #ef4444, #b91c1c);
+  box-shadow: 0 4px 0 #7f1d1d, 0 10px 20px rgba(239, 68, 68, 0.2);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.btn-innocent {
+  background: linear-gradient(to bottom, #3b82f6, #2563eb);
+  box-shadow: 0 4px 0 #1e40af, 0 10px 20px rgba(59, 130, 246, 0.2);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+
+/* --- 5. Logs & Evidence (Futuristic Panels) --- */
+
+.logs-area {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 220px;
+  height: 200px;
+  background: rgba(15, 23, 42, 0.7); /* Darker backdrop */
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 2px solid #94a3b8;
+  border-radius: 0 12px 12px 0; /* Techy corner */
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.7rem;
+  padding: 10px;
+  z-index: 20;
+  pointer-events: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #475569 transparent;
+  box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
+}
+
+.log-entry {
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  line-height: 1.4;
+}
+
+.log-type-alert { color: #fca5a5; }
+.log-type-verdict { color: #fbbf24; font-weight: bold; }
+.log-type-objection { color: #60a5fa; font-weight: bold; }
+.log-type-evidence { color: #86efac; }
+.log-type-system { color: #64748b; font-style: italic; }
+
+.evidence-board {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 200px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 20;
+  pointer-events: none; /* Let clicks pass through empty space */
+}
+
+/* Re-enable interactions for all children (Header, Input, Cards) */
+.evidence-board > * {
+  pointer-events: auto;
+}
+
+.evidence-header {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  margin-bottom: 8px;
+}
+
+.evidence-input-area {
+  background: rgba(30, 41, 59, 0.9);
+  backdrop-filter: blur(10px);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+  margin-bottom: 10px;
+}
+
+.evidence-input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 8px;
+  color: #fff;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.75rem;
+  outline: none;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.evidence-input:focus {
+  border-color: #3b82f6;
+  background: rgba(15, 23, 42, 1);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+.btn-submit-evidence {
+  background: linear-gradient(to bottom, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 5px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.btn-submit-evidence:hover {
+  filter: brightness(1.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+}
+
+.btn-submit-evidence:active {
+  transform: translateY(1px);
+}
+
+/* Holographic Evidence Chips */
+.evidence-card {
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1e293b;
+  padding: 12px;
+  border-radius: 2px 2px 12px 2px; /* Folded corner look */
+  transform: rotate(1deg);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  position: relative;
+  border-left: 3px solid #10b981;
+  transition: transform 0.2s;
+}
+
+.evidence-card:hover {
+  transform: rotate(0deg) scale(1.05) translateX(-5px);
+  z-index: 25;
+}
+
+.evidence-text {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.evidence-author {
+  font-size: 0.6rem;
+  color: #64748b;
+  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* --- 6. Objection! --- */
+.objection-btn-wrapper {
+  position: absolute;
+  bottom: 85px;
+  right: 20px;
+  z-index: 30;
+}
+
+.objection-bubble {
+  background: #fff;
+  color: #b91c1c;
+  padding: 12px 20px;
+  clip-path: polygon(10% 0, 100% 0, 100% 70%, 80% 70%, 60% 100%, 40% 70%, 0 70%, 0 20%);
+  font-weight: 900;
+  font-style: italic;
+  font-size: 1.1rem;
+  animation: wobble 3s ease-in-out infinite;
+  border: 2px solid #b91c1c; /* Fallback if clip-path fails */
+  filter: drop-shadow(0 5px 10px rgba(0,0,0,0.3));
+}
+
+/* --- 7. Modals & Overlays --- */
+.verdict-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+}
+
+.modal-box {
+  background: #0f172a;
+  border: 1px solid #334155;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  padding: 24px;
+}
+
+.modal-title {
+  text-align: center;
+  color: #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 20px;
+}
+
+.user-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.user-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid transparent;
+  padding: 10px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #fff;
+}
+
+.user-card:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+}
+
+.user-avatar-small {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  margin-bottom: 8px;
+  background: #1e293b;
+}
+
+.user-name-small {
+  font-size: 0.7rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.cancel-btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 12px;
+  background-color: transparent;
+  color: #94a3b8;
+  border-radius: 8px;
+  font-weight: bold;
+  border: 1px solid #334155;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  transition: all 0.2s;
+  font-size: 0.8rem;
+}
+
+.cancel-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: white;
+  border-color: #64748b;
+}
+
+/* Evidence Add Button Style */
+.btn-add-evidence {
+  font-size: 0.65rem;
+  background: linear-gradient(to right, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.4);
+  transition: all 0.2s;
+}
+
+.btn-add-evidence:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.5);
+}
+
+.stamp {
+  font-size: 6rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  border: 12px solid;
+  padding: 20px 60px;
+  border-radius: 20px;
+  transform: rotate(-15deg);
+  mix-blend-mode: normal; /* Fixed visibility */
+}
+
+.stamp-guilty {
+  color: #ef4444;
+  border-color: #ef4444;
+  text-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+  box-shadow: inset 0 0 20px rgba(239, 68, 68, 0.4), 0 0 50px rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.stamp-innocent {
+  color: #3b82f6;
+  border-color: #3b82f6;
+  text-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+  box-shadow: inset 0 0 20px rgba(59, 130, 246, 0.4), 0 0 50px rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* --- RESPONSIVE ADJUSTMENTS --- */
+@media (max-width: 600px) {
+  .courtroom-container { padding: 5px; }
+  
+  .court-header { margin-top: 5px; width: 95%; }
+  
+  .dock-area { transform: scale(0.9); }
+  
+  .logs-area {
+    width: 150px;
+    height: 120px;
+    top: 5px; left: 5px;
+    font-size: 0.6rem;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.9);
+  }
+  
+  .evidence-board {
+    width: 140px;
+    top: 5px; right: 5px;
+  }
+  
+  .evidence-card {
+    padding: 8px;
+    font-size: 0.65rem;
+  }
+  
+  .objection-btn-wrapper {
+    bottom: 140px; right: 10px;
+    transform: scale(0.8);
+    transform-origin: bottom right;
+  }
+  
+  .footer-area {
+    gap: 10px;
+    width: 95%;
+  }
+  
+  .score-number { font-size: 1.8rem; }
+  .vote-btn { font-size: 0.9rem; height: 50px; }
+  
+  .stamp { font-size: 3.5rem; border-width: 8px; padding: 10px 30px; }
+  .objection-text-img { font-size: 4rem; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes wobble {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+.shake-screen {
+  animation: earthquake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes earthquake {
+  10%, 90% { transform: translate3d(-2px, 0, 0); }
+  20%, 80% { transform: translate3d(4px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+  40%, 60% { transform: translate3d(6px, 0, 0); }
+}
+
+.objection-splash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  pointer-events: none;
+  background: rgba(0,0,0,0.3);
+}
+
+.objection-text-img {
+  font-size: 8rem;
+  color: #fff;
+  font-style: italic;
+  font-weight: 900;
+  font-family: 'Impact', sans-serif;
+  -webkit-text-stroke: 3px #b91c1c;
+  filter: drop-shadow(10px 10px 0px rgba(0,0,0,1));
+  transform: skewX(-10deg);
+}
