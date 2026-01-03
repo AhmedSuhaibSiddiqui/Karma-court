@@ -135,6 +135,7 @@ export default function Courtroom({
   // 2. Track Switching Logic
   useEffect(() => {
     const playTrack = (trackName: string) => {
+      // STOP if already playing this track to prevent audio glitches/restarts
       if (currentTrackRef.current === trackName) return;
       
       if (bgmRef.current) {

@@ -1,4 +1,4 @@
-/* client/src/components/courtroom.css */
+﻿/* client/src/components/courtroom.css */
 
 /* --- GLOBAL VARS & FONTS --- */
 
@@ -829,8 +829,9 @@
 /* --- 5. Logs & Evidence --- */
 .logs-area {
   position: absolute;
-  top: 10px;
+  top: 40%;
   left: 10px;
+  transform: translateY(-50%);
   width: 250px;
   height: 250px;
   background: var(--cyber-panel);
@@ -868,7 +869,7 @@
 
 .mute-control-wrapper {
   position: absolute;
-  top: 265px; /* Just below logs-area (250px + 10px top + 5px margin) */
+  top: calc(40% + 130px); 
   left: 10px;
   z-index: 20;
 }
@@ -921,10 +922,11 @@
 
 .evidence-board {
   position: absolute;
-  top: 10px;
+  top: 40%;
   right: 10px;
+  transform: translateY(-50%);
   width: 240px;
-  max-height: 70vh;
+  max-height: 60vh;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -962,6 +964,23 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
   margin-bottom: 10px;
+}
+
+.evidence-input-header {
+  border-bottom: 1px solid rgba(0, 243, 255, 0.3);
+  padding-bottom: 4px;
+  position: relative;
+}
+
+.evidence-input-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
+  box-shadow: 0 0 5px var(--neon-blue);
 }
 
 .evidence-input {

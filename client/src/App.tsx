@@ -3,6 +3,7 @@ import { DiscordSDK } from "@discord/embedded-app-sdk";
 import Courtroom from './components/Courtroom';
 import CourtOverlay from './components/CourtOverlay';
 import LoadingScreen from './components/LoadingScreen';
+import MobileNotice from './components/MobileNotice';
 
 import { ErrorHandler } from './utils/errorHandler';
 import './App.css';
@@ -43,7 +44,15 @@ function App() {
   const [isShaking, setIsShaking] = useState(false);
   const [showObjection, setShowObjection] = useState<string | null>(null);
   const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 800);
   
+  // Handle Resize for Mobile Check
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 800);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Persist Mute State
   const [isMuted, setIsMuted] = useState(() => {
     return localStorage.getItem('karma_court_mute') === 'true';
@@ -192,6 +201,10 @@ function App() {
         <p className="error-message">{error || "App running outside Discord."}</p>
       </div>
     );
+  }
+
+  if (isMobile) {
+    return <MobileNotice />;
   }
 
   if (!auth) return <LoadingScreen />;
