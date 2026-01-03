@@ -22,7 +22,7 @@ export default function CourtHeader({ crime, isJudge, onCrimeChange, onGenerateC
       </div>
       
       <motion.div 
-        className="crime-card"
+        className={`crime-card ${isJudge && !crime ? 'pulse-highlight' : ''}`}
         initial={{ scaleY: 0 }}
         animate={{ scaleY: 1 }}
         transition={{ duration: 0.5, ease: "circOut" }}

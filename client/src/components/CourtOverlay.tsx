@@ -113,48 +113,39 @@ export default function CourtOverlay({ logs, evidence, isMuted, isJudge, onToggl
             />
             <button 
               onClick={submitEvidence} 
-              className={`btn-submit-evidence relative overflow-hidden ${evidenceCooldown > 0 ? 'cursor-not-allowed opacity-80' : ''}`}
-              disabled={evidenceCooldown > 0}
+              className="btn-submit-evidence"
               aria-label="Submit Evidence"
             >
-              <div className="relative z-10">
-                {evidenceCooldown > 0 ? `SYNCING [${Math.ceil(evidenceCooldown)}S]` : "SUBMIT"}
-              </div>
-              {evidenceCooldown > 0 && (
-                <motion.div 
-                  className="absolute bottom-0 left-0 w-full bg-white/20 z-0"
-                  initial={{ height: "0%" }}
-                  animate={{ height: `${(evidenceCooldown / EVIDENCE_COOLDOWN_TIME) * 100}%` }}
-                  transition={{ duration: 0.1, ease: "linear" }}
-                />
-              )}
+              SUBMIT
             </button>
           </div>
         )}
 
-        {evidence.map((ev) => (
-          <motion.div 
-            key={ev.id} 
-            className="evidence-card"
-            initial={{ x: 50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-          >
-            <div className="flex justify-between items-start">
-               <div className="evidence-text">{ev.text}</div>
-               {isJudge && (
-                 <button 
-                   onClick={() => onDeleteEvidence(ev.id)}
-                   className="btn-delete-evidence"
-                   title="Remove Evidence"
-                   aria-label="Delete Evidence"
-                 >
-                   ✕
-                 </button>
-               )}
-            </div>
-            <div className="evidence-author">- {ev.author}</div>
-          </motion.div>
-        ))}
+        <div className="evidence-list-container">
+          {evidence.map((ev) => (
+            <motion.div 
+              key={ev.id} 
+              className="evidence-card"
+              initial={{ x: 50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+            >
+              <div className="flex justify-between items-start">
+                 <div className="evidence-text">{ev.text}</div>
+                 {isJudge && (
+                   <button 
+                     onClick={() => onDeleteEvidence(ev.id)}
+                     className="btn-delete-evidence"
+                     title="Remove Evidence"
+                     aria-label="Delete Evidence"
+                   >
+                     ✕
+                   </button>
+                 )}
+              </div>
+              <div className="evidence-author">- {ev.author}</div>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       {/* OBJECTION BUTTON (Floating) */}
