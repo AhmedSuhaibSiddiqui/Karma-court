@@ -1,11 +1,13 @@
 import os
 import requests
+import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from typing import List, Dict
+from typing import List, Dict, Optional
 import json
+from utils.error_handler import handle_error, log_info
 
 # 1. Load Secrets
 load_dotenv()
@@ -27,6 +29,7 @@ class GameManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
         self.user_map: Dict[WebSocket, str] = {} # Map WS -> user_id
+        self._timer_task: Optional[asyncio.Task] = None
         self.state = {
             "votes": {"guilty": 0, "innocent": 0},
             "crime": "Waiting for accusation...",
@@ -36,9 +39,66 @@ class GameManager:
                 "username": "Unknown",
                 "avatar": None
             },
+            "witness": {
+                "username": None,
+                "avatar": None
+            },
+            "voters": [],   # Track who voted
             "evidence": [], # List of {id, type, content, author}
-            "logs": []      # List of {timestamp, message, type}
+            "logs": [],      # List of {timestamp, message, type}
+            "timer": 60,     # Voting timer in seconds
+            "sentence": None # The punishment if guilty
         }
+        
+        # --- DATA BANKS (SIMULATED AI) ---
+        self.crimes_db = [
+            "Posting cringe in #general",
+            "Ghosting the squad for 3 weeks",
+            "Eating chips with an open mic",
+            "Using light mode unironically",
+            "Backseat gaming during a clutch",
+            "Pronouncing 'GIF' wrong",
+            "Spamming @everyone for no reason",
+            "Not boosting the server",
+            "Playing music bot at 200% volume",
+            "Stealing the last kill",
+            "Being AFK during the ready check",
+            "Having a chaotic desktop",
+            "Not saying 'GG' after a loss",
+            "Simping too hard",
+            "Using comic sans",
+            "Replying 'k' to a long paragraph",
+            "Leaving only 1 second on the microwave",
+            "Spoiling the movie ending 'by accident'",
+            "Using 'Reply All' on a company-wide email",
+            "Chewing loudly in voice chat",
+            "Not cropping the meme before posting",
+            "Sending voice messages longer than 2 minutes",
+            "Asking a question that was just answered",
+            "Linking a 30-minute YouTube video without a timestamp",
+            "Saying 'I'm down' then sleeping immediately"
+        ]
+        
+        self.sentences_db = [
+            "Must change nickname to 'Clown' for 24h",
+            "Banned from using vowels in chat for 10m",
+            "Must sing an apology song in VC",
+            "Forced to use Light Mode for 5 minutes",
+            "Must post a cringe selfie",
+            "Cannot speak for 3 rounds",
+            "Must compliment the Judge for 1 minute",
+            " sentenced to play League of Legends",
+            "Publicly shamed in #announcements",
+            "Must end every sentence with 'uwu' for 1 hour",
+            "Forced to use a default Discord avatar for a week",
+            "Banned from using emojis for 24 hours",
+            "Must change status to 'I love Nickelback'",
+            "Cannot mute mic for the next 30 minutes",
+            "Must write a haiku about their crime",
+            "Sentenced to be the server's personal butler for a day",
+            "Must react to every message with a clown emoji",
+            "Forced to stream their desktop while organizing it"
+        ]
 
     async def connect(self, websocket: WebSocket, user_id: str):
         await websocket.accept()
@@ -70,15 +130,15 @@ class GameManager:
                     self._log(f"Judge disconnected. New Judge is {new_judge_id}.", "system")
                 else:
                     self.state["judge_id"] = None
+                    self._cancel_timer()
                     self._log("Judge disconnected. Court adjourned.", "system")
 
     async def broadcast(self, message: dict):
         for connection in self.active_connections:
             try:
                 await connection.send_text(json.dumps(message))
-            except:
-                # We let the disconnect handler deal with it eventually, 
-                # or just pass here to avoid modification during iteration issues
+            except Exception as e:
+                handle_error(e, "broadcast")
                 pass
 
     def _log(self, message: str, type: str = "info"):
@@ -89,21 +149,83 @@ class GameManager:
         if len(self.state["logs"]) > 50:
             self.state["logs"].pop(0)
 
+    # --- TIMER LOGIC ---
+    def _start_timer(self):
+        self._cancel_timer()
+        self.state["timer"] = 60
+        self._timer_task = asyncio.create_task(self._timer_countdown())
+
+    def _cancel_timer(self):
+        if self._timer_task:
+            self._timer_task.cancel()
+            self._timer_task = None
+
+    async def _timer_countdown(self):
+        try:
+            while self.state["timer"] > 0:
+                await asyncio.sleep(1)
+                self.state["timer"] -= 1
+                # Broadcast timer update occasionally or every second
+                # Optimized: Only broadcast state update, no log spam
+                await self.broadcast({"type": "update", "data": self.state})
+            
+            # Timer finished -> Auto Verdict
+            await self._execute_verdict(auto=True)
+        except asyncio.CancelledError:
+            pass
+
+    async def _execute_verdict(self, auto=False):
+        self._cancel_timer()
+        g = self.state["votes"]["guilty"]
+        i = self.state["votes"]["innocent"]
+        
+        # Tie-breaker logic for auto-verdict
+        if g > i:
+            self.state["verdict"] = "guilty"
+        else:
+            self.state["verdict"] = "innocent"
+
+        await self.broadcast({"type": "sound", "sound": "gavel"})
+        
+        log_msg = f"Verdict delivered: {self.state['verdict'].upper()}"
+        if auto:
+            log_msg += " (Time Expired)"
+        
+        self._log(log_msg, "verdict")
+        await self.broadcast({"type": "update", "data": self.state})
+
     async def handle_message(self, message: dict, user_id: str):
         msg_type = message.get("type")
         username = message.get("username", "Unknown") # Expect username in some payloads
         
         # 1. Voting
         if msg_type == "vote":
+            # Rule: Cannot vote if no accused
+            if self.state["accused"]["username"] == "Unknown":
+                return
+
+            # Rule: One vote per user
+            if user_id in self.state["voters"]:
+                return
+
             vote = message.get("vote")
             # Only allow voting if no verdict yet
             if self.state["verdict"] is None and vote in self.state["votes"]:
                 self.state["votes"][vote] += 1
+                self.state["voters"].append(user_id)
                 await self.broadcast({"type": "sound", "sound": "vote"})
         
         # 2. Updating the Crime Text
         elif msg_type == "update_crime":
             self.state["crime"] = message.get("crime")
+            
+        # 2.5 Generate AI Crime
+        elif msg_type == "generate_crime":
+            if user_id == self.state["judge_id"]:
+                import random
+                new_crime = random.choice(self.crimes_db)
+                self.state["crime"] = new_crime
+                self._log("AI Protocol generated a new accusation.", "system")
 
         # 3. Accusing a User (Judge Only)
         elif msg_type == "accuse_user":
@@ -111,29 +233,54 @@ class GameManager:
                 self.state["accused"] = message.get("user")
                 # Reset round
                 self.state["votes"] = {"guilty": 0, "innocent": 0}
+                self.state["voters"] = [] # Reset voters
                 self.state["verdict"] = None
+                self.state["sentence"] = None
                 self.state["evidence"] = [] # Clear evidence for new case
-                self.state["crime"] = "Waiting for accusation..."
+                self.state["crime"] = self.state["crime"] if self.state["crime"] != "Waiting for accusation..." else "Enter new accusation..."
+                # Reset witness too
+                self.state["witness"] = {"username": None, "avatar": None}
                 
                 accused_name = self.state["accused"]["username"]
                 self._log(f"Judge accused {accused_name}!", "alert")
+                
+                # START TIMER
+                self._start_timer()
+
+        # 3.5 Call a Witness (Judge Only)
+        elif msg_type == "call_witness":
+            if user_id == self.state["judge_id"]:
+                self.state["witness"] = message.get("user")
+                witness_name = self.state["witness"]["username"]
+                self._log(f"Judge called witness {witness_name} to the stand.", "info")
 
         # 4. Calling the Verdict (Judge Only)
         elif msg_type == "call_verdict":
             if user_id == self.state["judge_id"]:
-                g = self.state["votes"]["guilty"]
-                i = self.state["votes"]["innocent"]
-                self.state["verdict"] = "guilty" if g >= i else "innocent"
-                await self.broadcast({"type": "sound", "sound": "gavel"})
-                self._log(f"Verdict delivered: {self.state['verdict'].upper()}", "verdict")
+                await self._execute_verdict(auto=False)
+                
+        # 4.5 Pass Sentence (Judge Only - After Guilty)
+        elif msg_type == "pass_sentence":
+             if user_id == self.state["judge_id"] and self.state["verdict"] == "guilty":
+                 import random
+                 punishment = random.choice(self.sentences_db)
+                 self.state["sentence"] = punishment
+                 self._log(f"SENTENCE PASSED: {punishment}", "alert")
+                 await self.broadcast({"type": "sound", "sound": "gavel"})
 
         # 5. Next Case (Judge Only)
         elif msg_type == "next_case":
             if user_id == self.state["judge_id"]:
+                self._cancel_timer()
                 self.state["votes"] = {"guilty": 0, "innocent": 0}
+                self.state["voters"] = [] # Reset voters
                 self.state["verdict"] = None
+                self.state["sentence"] = None
                 self.state["evidence"] = []
                 self.state["crime"] = "Enter new accusation..."
+                self.state["witness"] = {"username": None, "avatar": None}
+                self.state["accused"] = {"username": "Unknown", "avatar": None}
+                self.state["timer"] = 60 # Reset visual timer
                 self._log("Case closed. Preparing next case...", "info")
 
         # 6. OBJECTION! (Anyone)
@@ -156,12 +303,30 @@ class GameManager:
                 "author": username
             }
             self.state["evidence"].append(new_evidence)
+            await self.broadcast({"type": "sound", "sound": "evidence"})
             self._log(f"Evidence submitted by {username}", "evidence")
 
         # Send updated state to everyone
         await self.broadcast({"type": "update", "data": self.state})
 
-manager = GameManager()
+class GameRegistry:
+    def __init__(self):
+        self._games: Dict[str, GameManager] = {}
+
+    def get_game(self, instance_id: str) -> GameManager:
+        if instance_id not in self._games:
+            log_info(f"Creating new Game Instance: {instance_id}")
+            self._games[instance_id] = GameManager()
+        return self._games[instance_id]
+    
+    def cleanup_game(self, instance_id: str):
+        if instance_id in self._games:
+            game = self._games[instance_id]
+            if len(game.active_connections) == 0:
+                log_info(f"Cleaning up empty game: {instance_id}")
+                del self._games[instance_id]
+
+registry = GameRegistry()
 
 # --- AUTHENTICATION ---
 class TokenRequest(BaseModel):
@@ -170,30 +335,45 @@ class TokenRequest(BaseModel):
 
 @app.post("/api/token")
 async def exchange_token(request: TokenRequest):
-    data = {
-        'client_id': CLIENT_ID,
-        'client_secret': CLIENT_SECRET,
-        'grant_type': 'authorization_code',
-        'code': request.code,
-        'redirect_uri': request.redirect_uri,
-    }
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    
-    r = requests.post('https://discord.com/api/oauth2/token', data=data, headers=headers)
-    
-    if r.status_code != 200:
-        print(f"Discord Auth Error: {r.text}")
-        raise HTTPException(status_code=400, detail=r.json())
-    
-    return r.json()
+    try:
+        data = {
+            'client_id': CLIENT_ID,
+            'client_secret': CLIENT_SECRET,
+            'grant_type': 'authorization_code',
+            'code': request.code,
+            'redirect_uri': request.redirect_uri,
+        }
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        
+        r = requests.post('https://discord.com/api/oauth2/token', data=data, headers=headers)
+        
+        if r.status_code != 200:
+            log_info(f"Discord Auth Error: {r.text}")
+            raise HTTPException(status_code=400, detail=r.json())
+        
+        return r.json()
+    except Exception as e:
+        handle_error(e, "token_exchange")
+        raise e
 
 # --- WEBSOCKETS ---
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, user_id: str = "anon"):
-    await manager.connect(websocket, user_id)
+async def websocket_endpoint(websocket: WebSocket, user_id: str = "anon", instance_id: str = "default"):
+    # Get or create the game room for this specific Discord instance
+    game = registry.get_game(instance_id)
+    
+    await game.connect(websocket, user_id)
     try:
         while True:
             data = await websocket.receive_text()
-            await manager.handle_message(json.loads(data), user_id)
+            try:
+                await game.handle_message(json.loads(data), user_id)
+            except Exception as e:
+                 handle_error(e, "handle_message")
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        game.disconnect(websocket)
+        registry.cleanup_game(instance_id)
+    except Exception as e:
+        handle_error(e, "websocket_loop")
+        game.disconnect(websocket)
+        registry.cleanup_game(instance_id)

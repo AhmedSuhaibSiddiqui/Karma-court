@@ -6,6 +6,7 @@ Featuring a sleek **Cyber-Justice** aesthetic, interactive "Objection!" mechanic
 
 ## 🚀 Features
 
+- **Multi-Tenancy:** Supports unlimited concurrent courtroom sessions. Each Discord server/channel gets its own private instance.
 - **Real-time Courtroom:** Built with WebSockets for instant voting and feedback.
 - **Judge & Jury System:** Auto-assigned Judge role with the power to accuse, present evidence, and call the final verdict.
 - **OBJECTION! Mechanic:** Shake the screen and interrupt the court with a giant animated splash.
@@ -13,11 +14,12 @@ Featuring a sleek **Cyber-Justice** aesthetic, interactive "Objection!" mechanic
 - **Court Record:** A scrolling terminal log of every action taken during the session.
 - **Dynamic Feedback:** UI colors shift from Fire (Red/Guilty) to Ice (Blue/Innocent) based on the current vote lead.
 - **Responsive Design:** Optimized for both large desktop windows and narrow Discord mobile/sidebar panels.
+- **Robust Error Handling:** Comprehensive logging and error recovery for network and SDK issues.
 
 ## 🛠 Tech Stack
 
 - **Frontend:** React, TypeScript, Vite, Framer Motion, Discord Embedded App SDK.
-- **Backend:** Python, FastAPI, WebSockets.
+- **Backend:** Python, FastAPI, WebSockets (with separate GameRegistry).
 - **Styling:** Custom CSS with Cyber-Justice theme.
 
 ## 📦 Setup Instructions
@@ -31,9 +33,14 @@ Featuring a sleek **Cyber-Justice** aesthetic, interactive "Objection!" mechanic
 ```bash
 cd server
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# On Windows:
+venv\Scripts\activate
+# On Mac/Linux:
+source venv/bin/activate
+
 pip install -r requirements.txt
 cp sample.env .env  # Add your Discord credentials to .env
+# Start the server (Development)
 uvicorn main:app --reload --port 8000
 ```
 
@@ -52,10 +59,13 @@ cloudflared tunnel --url http://localhost:5173
 ```
 Map the generated URL in your Discord Developer Portal under **Embedded App SDK -> URL Mappings**.
 
-## 🌐 Deployment
+## 🌐 Deployment (Production)
 
-- **Backend:** Deploy `server/` to [Render](https://render.com) or similar (Build: `pip install -r requirements.txt`, Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`).
-- **Frontend:** Deploy `client/` to [Vercel](https://vercel.com) or [Netlify](https://netlify.com). Ensure `VITE_BACKEND_URL` points to your deployed backend.
+- **Backend:** Deploy `server/` to [Render](https://render.com), [Fly.io](https://fly.io), or AWS.
+  - **Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
+  - **Env Vars:** `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`.
+- **Frontend:** Deploy `client/` to [Vercel](https://vercel.com) or [Netlify](https://netlify.com).
+  - **Env Vars:** `VITE_DISCORD_CLIENT_ID`, `VITE_BACKEND_URL` (set to your deployed backend HTTPS URL).
 
 ## 📜 License
 

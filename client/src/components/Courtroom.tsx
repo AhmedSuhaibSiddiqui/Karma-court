@@ -1,7 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef} from 'react';
+import type { ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DiscordSDK } from "@discord/embedded-app-sdk";
-import './Courtroom.css';
+import LandingScreen from './LandingScreen';
+import CourtHeader from './courtroom_modules/CourtHeader';
+import Dock from './courtroom_modules/Dock';
+import VerdictControls from './courtroom_modules/VerdictControls';
+import AudienceGallery from './courtroom_modules/AudienceGallery';
+import './courtroom.css';
 
 interface DiscordUser {
   id: string;
@@ -12,10 +18,14 @@ interface DiscordUser {
 
 interface GameState {
   votes: { guilty: number; innocent: number };
+  voters: string[];
   crime: string;
   verdict: 'guilty' | 'innocent' | null;
+  sentence: string | null;
   judge_id: string | null;
   accused: { username: string; avatar: string | null };
+  witness: { username: string | null; avatar: string | null };
+  timer: number;
 }
 
 interface CourtroomProps {
@@ -24,101 +34,196 @@ interface CourtroomProps {
   gameState: GameState;
   isShaking: boolean;
   showObjection: string | null;
+  speakingUsers: Set<string>;
   onVote: (type: 'guilty' | 'innocent') => void;
   onUpdateCrime: (crime: string) => void;
+  onGenerateCrime: () => void;
   onCallVerdict: () => void;
+  onPassSentence: () => void;
   onNextCase: () => void;
   onAccuseUser: (user: any) => void;
+  onCallWitness: (user: any) => void;
 }
 
-export default function Courtroom({ 
-  currentUser, 
-  discordSdk, 
-  gameState, 
-  isShaking, 
+export default function Courtroom({
+  currentUser,
+  discordSdk,
+  gameState,
+  isShaking,
   showObjection,
+  speakingUsers,
   onVote,
   onUpdateCrime,
+  onGenerateCrime,
   onCallVerdict,
+  onPassSentence,
   onNextCase,
-  onAccuseUser
+  onAccuseUser,
+  onCallWitness
 }: CourtroomProps) {
-  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionMode, setSelectionMode] = useState<'accused' | 'witness' | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
+  
+  // Audio Interaction Gate
+  const [hasInteracted, setHasInteracted] = useState(false);
 
   // Local State for Input (Anti-Lag)
   const [localCrime, setLocalCrime] = useState(gameState.crime);
   const crimeDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync Local State with Server State (Only if we aren't the ones typing or on initial load)
-  // Simple approach: Always sync, but the local change handler overrides it temporarily
+  // Sync Local State
   useEffect(() => {
-    // Only update if the server value is significantly different to avoid cursor jumps
-    // or simply update it if we haven't typed recently.
-    // For simplicity, we just update it. The typing experience is handled by the local state priority.
     setLocalCrime(gameState.crime);
   }, [gameState.crime]);
 
-  const handleCrimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Sync Participants List periodically or once
+  useEffect(() => {
+    const fetchParticipants = async () => {
+        try {
+            const channel = await discordSdk.commands.getInstanceConnectedParticipants();
+            setParticipants(channel.participants);
+        } catch (e) {
+            console.warn("Failed to fetch participants", e);
+        }
+    };
+    fetchParticipants();
+    // Poll every 5s to keep gallery updated? Or just on load/interaction.
+    const interval = setInterval(fetchParticipants, 5000);
+    return () => clearInterval(interval);
+  }, [discordSdk]);
+
+  const handleCrimeChange = (e: ChangeEvent<HTMLInputElement>) => {
     const newVal = e.target.value;
     setLocalCrime(newVal);
 
     if (crimeDebounce.current) clearTimeout(crimeDebounce.current);
-    
     crimeDebounce.current = setTimeout(() => {
       onUpdateCrime(newVal);
-    }, 500); // Send update after 500ms of silence
+    }, 500);
   };
 
-  // --- JUDGE: PICK DEFENDANT ---
+  // --- MUSIC MANAGER ---
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const currentTrackRef = useRef<string | null>(null);
+
+  // 1. Resume Audio on Interaction (The "Join" Click)
+  useEffect(() => {
+    if (hasInteracted && bgmRef.current) {
+      bgmRef.current.play().catch(() => {});
+    }
+  }, [hasInteracted]);
+
+  // 2. Track Switching Logic
+  useEffect(() => {
+    const playTrack = (trackName: string) => {
+      if (currentTrackRef.current === trackName) return;
+      
+      if (bgmRef.current) {
+        const oldAudio = bgmRef.current;
+        let vol = 0.3;
+        const fade = setInterval(() => {
+          if (vol > 0.05) {
+            vol -= 0.05;
+            oldAudio.volume = vol;
+          } else {
+            clearInterval(fade);
+            oldAudio.pause();
+          }
+        }, 100);
+      }
+
+      const newAudio = new Audio(`/sounds/${trackName}.mp3`);
+      newAudio.loop = true;
+      newAudio.volume = 0;
+      
+      newAudio.play().catch(() => {
+        console.log("Autoplay waiting for interaction...");
+      });
+      
+      let volIn = 0;
+      const fadeIn = setInterval(() => {
+        if (volIn < 0.3) {
+           volIn += 0.05;
+           newAudio.volume = volIn;
+        } else {
+           clearInterval(fadeIn);
+        }
+      }, 100);
+
+      bgmRef.current = newAudio;
+      currentTrackRef.current = trackName;
+    };
+
+    if (gameState.verdict) {
+      // Fallback to trial_theme if verdict_tension is missing, or keep trial theme playing
+      playTrack('trial_theme'); 
+    } else if (gameState.accused.username !== "Unknown") {
+      playTrack('trial_theme');
+    } else {
+      playTrack('lobby_theme');
+    }
+  }, [gameState.verdict, gameState.crime]);
+
+  // --- JUDGE ACTIONS ---
   const isJudge = gameState.judge_id === currentUser.id;
 
-  const openSelectionModal = async () => {
+  const openSelectionModal = async (mode: 'accused' | 'witness') => {
     if (!isJudge) return;
     const channel = await discordSdk.commands.getInstanceConnectedParticipants();
     setParticipants(channel.participants);
-    setIsSelecting(true);
+    setSelectionMode(mode);
   };
 
-  const pickAccused = (user: any) => {
-    onAccuseUser({ 
+  const handleSelection = (user: any) => {
+    const userPayload = { 
       username: user.username || user.global_name, 
       avatar: user.avatar 
         ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=256`
         : "https://cdn.discordapp.com/embed/avatars/0.png"
-    });
-    setIsSelecting(false);
+    };
+
+    if (selectionMode === 'accused') {
+      onAccuseUser(userPayload);
+    } else if (selectionMode === 'witness') {
+      onCallWitness(userPayload);
+    }
+    setSelectionMode(null);
   };
 
-  // --- DYNAMIC STYLING ---
-  const { guilty, innocent } = gameState.votes;
-  
-  const getRingColor = () => {
-    if (guilty > innocent) return 'ring-guilty';
-    if (innocent > guilty) return 'ring-innocent';
-    return 'ring-neutral'; // Tie / Default
+  // --- VOTING LOGIC ---
+  const [myVote, setMyVote] = useState<'guilty' | 'innocent' | null>(null);
+
+  useEffect(() => {
+    if ((gameState.voters || []).length === 0) {
+      setMyVote(null);
+    }
+  }, [gameState.voters]);
+
+  const handleVote = (type: 'guilty' | 'innocent') => {
+    onVote(type);
+    setMyVote(type);
   };
 
-  const getNameStyle = () => {
-    if (guilty > innocent) return { 
-        backgroundImage: "linear-gradient(to bottom, #f87171, #dc2626)", 
-        textShadow: "0 0 30px rgba(220, 38, 38, 0.8)" 
-    };
-    if (innocent > guilty) return { 
-        backgroundImage: "linear-gradient(to bottom, #60a5fa, #2563eb)", 
-        textShadow: "0 0 30px rgba(37, 99, 235, 0.8)" 
-    };
-    // Tie: Fire & Ice Gradient
-    return { 
-        backgroundImage: "linear-gradient(to right, #ef4444, #3b82f6)", 
-        textShadow: "0 0 20px rgba(255, 255, 255, 0.3)" 
-    };
-  };
+  const isUnknown = gameState.accused.username === "Unknown";
+  const hasVoted = (gameState.voters || []).includes(currentUser.id) || myVote !== null;
+  const canVote = !isUnknown && !hasVoted;
+  const isExecutionDisabled = isUnknown || gameState.crime === "Waiting for accusation..." || !gameState.crime || gameState.crime.trim() === "";
 
   return (
     <div className={`courtroom-container ${isShaking ? 'shake-screen' : ''}`}>
       
-      {/* OBJECTION SPLASH OVERLAY */}
+      <AnimatePresence>
+        {!hasInteracted && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.8 } }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
+          >
+             <LandingScreen onJoin={() => setHasInteracted(true)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showObjection && (
           <motion.div 
@@ -136,15 +241,14 @@ export default function Courtroom({
         )}
       </AnimatePresence>
 
-      {/* MODAL: SELECT DEFENDANT */}
       <AnimatePresence>
-        {isSelecting && (
+        {selectionMode && (
           <motion.div className="verdict-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="modal-box">
-              <h3 className="modal-title">SELECT THE ACCUSED</h3>
+              <h3 className="modal-title">SELECT {selectionMode === 'accused' ? 'THE ACCUSED' : 'A WITNESS'}</h3>
               <div className="user-grid">
                 {participants.map(p => (
-                  <button key={p.id} onClick={() => pickAccused(p)} className="user-card">
+                  <button key={p.id} onClick={() => handleSelection(p)} className="user-card">
                     <img 
                       src={p.avatar ? `https://cdn.discordapp.com/avatars/${p.id}/${p.avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png"} 
                       className="user-avatar-small" 
@@ -153,21 +257,20 @@ export default function Courtroom({
                   </button>
                 ))}
               </div>
-              <button onClick={() => setIsSelecting(false)} className="cancel-btn">CANCEL</button>
+              <button onClick={() => setSelectionMode(null)} className="cancel-btn">CANCEL</button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* MODAL: VERDICT STAMP */}
+      {/* VERDICT & SENTENCE OVERLAY */}
       <AnimatePresence>
-        {gameState.verdict && (
+        {gameState.verdict && !gameState.sentence && (
           <motion.div 
             className="verdict-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => isJudge && onNextCase()} 
           >
-            <div className="flex flex-col items-center">
+            <div className="verdict-content">
               <motion.div 
                 className={`stamp ${gameState.verdict === 'guilty' ? 'stamp-guilty' : 'stamp-innocent'}`}
                 initial={{ scale: 5, opacity: 0, rotate: -15 }}
@@ -176,96 +279,83 @@ export default function Courtroom({
               >
                 {gameState.verdict}
               </motion.div>
-              {isJudge && <p className="mt-8 text-white/50 text-sm animate-pulse cursor-pointer bg-black/50 px-4 py-2 rounded">Click anywhere for next case</p>}
+              
+              <div className="verdict-buttons">
+                {isJudge && gameState.verdict === 'guilty' && (
+                   <button onClick={onPassSentence} className="btn-sentence">
+                      ⚖️ PASS SENTENCE
+                   </button>
+                )}
+                
+                {isJudge && (gameState.verdict === 'innocent') && (
+                   <button onClick={onNextCase} className="btn-next-case">
+                      NEXT CASE &gt;&gt;
+                   </button>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* SENTENCE REVEAL OVERLAY */}
+      <AnimatePresence>
+        {gameState.sentence && (
+           <motion.div 
+            className="verdict-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => isJudge && onNextCase()}
+           >
+              <div className="sentence-card">
+                  <h2 className="sentence-title">PUNISHMENT DECREED</h2>
+                  <p className="sentence-text">{gameState.sentence}</p>
+                  {isJudge && <p className="mt-4 text-xs text-slate-400 text-center">Click to Close Case</p>}
+              </div>
+           </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* HEADER */}
-      <div className="court-header">
-        <div className="warning-wrapper"><h2 className="warning-text">⚠ COURT IN SESSION ⚠</h2></div>
-        <motion.div className="crime-card">
-          <p className="crime-label">SUBJECT ACCUSED OF:</p>
-          <input 
-            className="crime-input"
-            value={localCrime}
-            onChange={handleCrimeChange}
-            placeholder={isJudge ? "Type the accusation..." : "Judge is typing..."}
-            disabled={!isJudge} 
-          />
-        </motion.div>
+      <CourtHeader 
+        crime={localCrime} 
+        isJudge={isJudge} 
+        onCrimeChange={handleCrimeChange} 
+        onGenerateCrime={onGenerateCrime}
+      />
+
+      {/* MAIN STAGE (DOCK + WITNESS) */}
+      <Dock 
+        accused={gameState.accused}
+        witness={gameState.witness}
+        verdict={gameState.verdict}
+        votes={gameState.votes}
+        isJudge={isJudge}
+        currentUserId={currentUser.id}
+        judgeId={gameState.judge_id}
+        onSelectAccused={() => openSelectionModal('accused')}
+        onSelectWitness={() => openSelectionModal('witness')}
+      />
+
+      {/* FOOTER AREA */}
+      <div className="flex flex-col w-full max-w-[800px] gap-2 mb-2" style={{zIndex: 20}}>
+         <VerdictControls 
+            votes={gameState.votes}
+            isJudge={isJudge}
+            userVote={myVote}
+            canVote={canVote}
+            timer={gameState.timer}
+            isExecutionDisabled={isExecutionDisabled}
+            onVote={handleVote}
+            onCallVerdict={onCallVerdict}
+         />
+         
+         <AudienceGallery 
+            participants={participants} 
+            speakingUsers={speakingUsers} 
+            judgeId={gameState.judge_id}
+         />
       </div>
 
-      {/* DOCK */}
-      <div className="dock-area">
-        <div 
-          className={`avatar-container ${isJudge ? 'cursor-pointer hover:scale-105 transition' : ''}`}
-          onClick={openSelectionModal}
-          title={isJudge ? "Click to change accused" : ""}
-        >
-          {/* Dynamic Ring Color */}
-          <div className={`scan-ring-1 ${getRingColor()}`}></div>
-          <div className="scan-ring-2"></div>
-          
-          <motion.img 
-            src={gameState.accused.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} 
-            alt="Accused" 
-            initial={{ scale: 0.8 }} animate={{ scale: 1 }}
-            className="avatar-image"
-          />
-        </div>
-        
-        <motion.h1 
-          className="accused-name"
-          animate={getNameStyle()}
-          transition={{ duration: 0.5 }}
-          style={{ WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}
-        >
-          {gameState.accused.username}
-        </motion.h1>
-
-        <div className="status-badge">
-            {isJudge ? "YOU ARE THE JUDGE" : `JUDGE: ${gameState.judge_id === currentUser.id ? "YOU" : "PRESENT"}`}
-        </div>
-        {isJudge && <p style={{fontSize: '0.6rem', color: '#94a3b8', marginTop: '5px', letterSpacing: '1px', textTransform: 'uppercase'}}>Click avatar to change defendant</p>}
-      </div>
-
-      {/* FOOTER */}
-      <div className="footer-area">
-        <div className="scoreboard">
-          <div className="score-box red-team">
-             <div className="score-number">{gameState.votes.guilty}</div>
-             <div className="score-label">Guilty</div>
-          </div>
-          
-          {isJudge ? (
-            <button onClick={onCallVerdict} className="vs-badge hover:bg-slate-700 transition">
-               ⚖️ CALL VERDICT
-            </button>
-          ) : (
-            <div className="vs-badge opacity-50">VS</div>
-          )}
-
-          <div className="score-box blue-team">
-             <div className="score-number">{gameState.votes.innocent}</div>
-             <div className="score-label">Innocent</div>
-          </div>
-        </div>
-
-        <div className="button-row">
-          <VoteButton className="vote-btn btn-guilty" label="GUILTY 💀" onClick={() => onVote('guilty')} />
-          <VoteButton className="vote-btn btn-innocent" label="INNOCENT 😇" onClick={() => onVote('innocent')} />
-        </div>
-      </div>
     </div>
-  );
-}
-
-function VoteButton({ className, label, onClick }: { className: string, label: string, onClick: () => void }) {
-  return (
-    <motion.button whileHover={{ scale: 1.02, filter: 'brightness(1.2)' }} whileTap={{ scale: 0.95 }} onClick={onClick} className={className}>
-      {label}
-    </motion.button>
   );
 }

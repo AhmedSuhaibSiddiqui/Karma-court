@@ -2,7 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import Courtroom from './components/Courtroom';
 import CourtOverlay from './components/CourtOverlay';
+import LoadingScreen from './components/LoadingScreen';
 
+import { ErrorHandler } from './utils/errorHandler';
 import './App.css';
 
 // --- SDK INITIALIZATION ---
@@ -12,7 +14,7 @@ if (location.search.includes("frame_id")) {
   try {
     discordSdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
   } catch (e) {
-    console.error("Failed to init SDK:", e);
+    ErrorHandler.handleSDKError(e);
   }
 } else {
   console.warn("Running in Browser Mode (No SDK)");
@@ -21,10 +23,12 @@ if (location.search.includes("frame_id")) {
 // Default Game State
 const INITIAL_STATE = {
   votes: { guilty: 0, innocent: 0 },
+  voters: [],
   crime: "Waiting for accusation...",
   verdict: null,
   judge_id: null,
   accused: { username: "Unknown", avatar: null },
+  witness: { username: null, avatar: null },
   evidence: [],
   logs: []
 };
@@ -38,6 +42,7 @@ function App() {
   const [gameState, setGameState] = useState<any>(INITIAL_STATE);
   const [isShaking, setIsShaking] = useState(false);
   const [showObjection, setShowObjection] = useState<string | null>(null);
+  const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
   const ws = useRef<WebSocket | null>(null);
 
   // --- AUTHENTICATION ---
@@ -69,6 +74,29 @@ function App() {
           scope: ["identify", "guilds", "rpc.voice.read"],
         });
         console.log("Authorized! Code:", code);
+        
+        // --- VOICE SUBSCRIPTIONS ---
+        try {
+            const channelId = discordSdk.channelId;
+            if (channelId) {
+                await discordSdk.subscribe("SPEAKING_START", (event: { user_id: string }) => {
+                    setSpeakingUsers(prev => new Set(prev).add(event.user_id));
+                }, { channel_id: channelId });
+                
+                await discordSdk.subscribe("SPEAKING_STOP", (event: { user_id: string }) => {
+                    setSpeakingUsers(prev => {
+                        const next = new Set(prev);
+                        next.delete(event.user_id);
+                        return next;
+                    });
+                }, { channel_id: channelId });
+                console.log("Voice events subscribed for channel:", channelId);
+            } else {
+                console.warn("Channel ID not found, voice events skipped.");
+            }
+        } catch (e) {
+            ErrorHandler.handleSDKError(e);
+        }
 
         // Exchange code for token via backend
         console.log("Exchanging token via backend...");
@@ -104,10 +132,10 @@ function App() {
         setAuth(newAuth);
 
       } catch (e: any) {
-        console.error("Auth Failed:", e);
+        const errorMsg = ErrorHandler.handleAPIError(e);
         didAuth.current = false; // Reset lock on error
         if (!e.message?.includes("Already authing")) {
-            setError(e.message || "Unknown Error");
+            setError(errorMsg);
         }
       }
     };
@@ -134,10 +162,11 @@ function App() {
     // Ensure no trailing slash issues
     wsUrl = wsUrl.endsWith('/') ? wsUrl.slice(0, -1) : wsUrl;
 
-    const socket = new WebSocket(`${wsUrl}/ws?user_id=${auth.user.id}`);
+    const instanceId = discordSdk?.instanceId || 'default';
+    const socket = new WebSocket(`${wsUrl}/ws?user_id=${auth.user.id}&instance_id=${instanceId}`);
 
     socket.onopen = () => console.log("WebSocket Connected");
-    socket.onerror = (e) => console.error("WebSocket Error:", e);
+    socket.onerror = (e) => ErrorHandler.handleWebSocketError(e);
 
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -187,17 +216,7 @@ function App() {
   }
 
   if (!auth) {
-    return (
-      <div className="app-container">
-        <div className="loading-wrapper">
-          <div className="loading-spinner"></div>
-          <p className="loading-text">INITIALIZING SYSTEM...</p>
-          <p style={{fontSize: '0.8rem', color: '#64748b', marginTop: '10px'}}>
-             Check console (F12) if stuck.
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
@@ -208,17 +227,20 @@ function App() {
         gameState={gameState}
         isShaking={isShaking}
         showObjection={showObjection}
+        speakingUsers={speakingUsers}
         onVote={(vote) => sendAction({ type: 'vote', vote })}
         onUpdateCrime={(crime) => sendAction({ type: 'update_crime', crime })}
+        onGenerateCrime={() => sendAction({ type: 'generate_crime' })}
         onCallVerdict={() => sendAction({ type: 'call_verdict' })}
+        onPassSentence={() => sendAction({ type: 'pass_sentence' })}
         onNextCase={() => sendAction({ type: 'next_case' })}
         onAccuseUser={(user) => sendAction({ type: 'accuse_user', user })}
+        onCallWitness={(user) => sendAction({ type: 'call_witness', user })}
       />
       
       <CourtOverlay 
         logs={gameState.logs}
         evidence={gameState.evidence}
-        username={auth.user.username}
         onAddEvidence={(text) => sendAction({ type: 'add_evidence', text, username: auth.user.username })}
         onObjection={() => sendAction({ type: 'objection', username: auth.user.username })}
       />

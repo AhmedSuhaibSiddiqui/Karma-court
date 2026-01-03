@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import './Courtroom.css';
+import './courtroom.css';
 
 interface Evidence {
   id: number;
@@ -16,12 +16,11 @@ interface LogEntry {
 interface CourtOverlayProps {
   logs: LogEntry[];
   evidence: Evidence[];
-  username: string;
   onAddEvidence: (text: string) => void;
   onObjection: () => void;
 }
 
-export default function CourtOverlay({ logs, evidence, username, onAddEvidence, onObjection }: CourtOverlayProps) {
+export default function CourtOverlay({ logs, evidence, onAddEvidence, onObjection }: CourtOverlayProps) {
   const [showEvidenceInput, setShowEvidenceInput] = useState(false);
   const [evidenceText, setEvidenceText] = useState("");
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -42,7 +41,7 @@ export default function CourtOverlay({ logs, evidence, username, onAddEvidence, 
     <>
       {/* COURT RECORD (LOGS) - Top Left */}
       <div className="logs-area">
-        <h4 className="text-xs font-bold text-gray-400 mb-2 sticky top-0 bg-slate-900/90 w-full p-1 border-b border-white/10">COURT RECORD</h4>
+        <h4 className="logs-header">COURT RECORD</h4>
         {logs.map((log, i) => (
           <div key={i} className={`log-entry log-type-${log.type}`}>
             {log.message}
@@ -54,7 +53,7 @@ export default function CourtOverlay({ logs, evidence, username, onAddEvidence, 
       {/* EVIDENCE BOARD - Top Right */}
       <div className="evidence-board">
         <div className="evidence-header">
-            <h4 className="text-[0.65rem] font-bold text-gray-400">EVIDENCE</h4>
+            <h4 className="evidence-title">EVIDENCE</h4>
             <button 
               onClick={() => setShowEvidenceInput(!showEvidenceInput)}
               className="btn-add-evidence"
