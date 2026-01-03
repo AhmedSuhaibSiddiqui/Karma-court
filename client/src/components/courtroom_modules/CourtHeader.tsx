@@ -31,7 +31,12 @@ export default function CourtHeader({ crime, isJudge, onCrimeChange, onGenerateC
         <div className="flex justify-between items-center mb-1">
              <p className="crime-label">/// CURRENT ACCUSATION ///</p>
              {isJudge && (
-               <button onClick={onGenerateCrime} className="btn-ai-gen" title="Auto-Generate Accusation">
+               <button 
+                onClick={onGenerateCrime} 
+                className="btn-ai-gen" 
+                title="Auto-Generate Accusation"
+                aria-label="Generate AI Accusation"
+               >
                  🤖 AI_GEN
                </button>
              )}

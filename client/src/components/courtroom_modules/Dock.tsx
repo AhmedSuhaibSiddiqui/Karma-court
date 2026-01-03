@@ -92,7 +92,9 @@ export default function Dock({
           </h1>
           <div className="status-badge">
             {isJudge ? (
-              <span className="judge-auth-text" data-text=">>> AUTH: JUDGE <<<"></span>
+              <span className="judge-auth-text" data-text=">>> AUTH: JUDGE <<<">
+                &gt; AUTH: JUDGE &lt;&lt;&lt;
+              </span>
             ) : (
               <span>JUDGE: {judgeId === currentUserId ? "YOU" : "PRESENT"}</span>
             )}

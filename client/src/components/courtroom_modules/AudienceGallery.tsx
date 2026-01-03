@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion';
+import type { DiscordUser } from '../../types/game';
 import '../courtroom.css';
 
 interface AudienceGalleryProps {
-  participants: any[];
+  participants: DiscordUser[];
   speakingUsers: Set<string>;
   judgeId: string | null;
 }
@@ -37,8 +38,7 @@ export default function AudienceGallery({ participants, speakingUsers, judgeId }
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ type: 'spring' }}
-              // @ts-ignore
-              style={{ "--i": index }}
+              style={{ "--i": index } as React.CSSProperties}
             >
               <div className="gallery-avatar-wrapper">
                  <img src={avatarUrl} alt={p.username} className="gallery-avatar" />

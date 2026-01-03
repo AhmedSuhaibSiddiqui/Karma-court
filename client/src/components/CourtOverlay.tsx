@@ -17,26 +17,50 @@ interface CourtOverlayProps {
   logs: LogEntry[];
   evidence: Evidence[];
   isMuted: boolean;
+  isJudge: boolean;
   onToggleMute: () => void;
   onAddEvidence: (text: string) => void;
+  onDeleteEvidence: (id: number) => void;
   onObjection: () => void;
 }
 
-export default function CourtOverlay({ logs, evidence, isMuted, onToggleMute, onAddEvidence, onObjection }: CourtOverlayProps) {
+export default function CourtOverlay({ logs, evidence, isMuted, isJudge, onToggleMute, onAddEvidence, onDeleteEvidence, onObjection }: CourtOverlayProps) {
   const [showEvidenceInput, setShowEvidenceInput] = useState(false);
   const [evidenceText, setEvidenceText] = useState("");
+  const [evidenceCooldown, setEvidenceCooldown] = useState(0);
+  const [objectionCooldown, setObjectionCooldown] = useState(0);
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Constants for cooldowns (match server)
+  const EVIDENCE_COOLDOWN_TIME = 3;
+  const OBJECTION_COOLDOWN_TIME = 10;
 
   // Auto-scroll logs
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
+  // Cooldown Timer Tick (using 100ms for smoother visual fill)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setEvidenceCooldown((prev) => Math.max(0, prev - 0.1));
+      setObjectionCooldown((prev) => Math.max(0, prev - 0.1));
+    }, 100);
+    return () => clearInterval(timer);
+  }, []);
+
   const submitEvidence = () => {
-    if (!evidenceText.trim()) return;
+    if (!evidenceText.trim() || evidenceCooldown > 0) return;
     onAddEvidence(evidenceText);
     setEvidenceText("");
     setShowEvidenceInput(false);
+    setEvidenceCooldown(EVIDENCE_COOLDOWN_TIME);
+  };
+
+  const handleObjection = () => {
+    if (objectionCooldown > 0) return;
+    onObjection();
+    setObjectionCooldown(OBJECTION_COOLDOWN_TIME);
   };
 
   return (
@@ -54,8 +78,12 @@ export default function CourtOverlay({ logs, evidence, isMuted, onToggleMute, on
 
       {/* MUTE BUTTON - Below Logs */}
       <div className="mute-control-wrapper">
-        <button onClick={onToggleMute} className="btn-mute-alt">
-           {isMuted ? "🔇" : "🔊"}
+        <button 
+          onClick={onToggleMute} 
+          className="btn-mute-alt"
+          aria-label={isMuted ? "Unmute Background Music" : "Mute Background Music"}
+        >
+           {isMuted ? "🔇 Music OFF" : "🔊 Music ON"}
         </button>
       </div>
 
@@ -66,6 +94,7 @@ export default function CourtOverlay({ logs, evidence, isMuted, onToggleMute, on
             <button 
               onClick={() => setShowEvidenceInput(!showEvidenceInput)}
               className="btn-add-evidence"
+              aria-label="Add New Evidence"
             >
               + ADD
             </button>
@@ -80,8 +109,26 @@ export default function CourtOverlay({ logs, evidence, isMuted, onToggleMute, on
               maxLength={100}
               onChange={e => setEvidenceText(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && submitEvidence()}
+              aria-label="Evidence Text Input"
             />
-            <button onClick={submitEvidence} className="btn-submit-evidence">SUBMIT</button>
+            <button 
+              onClick={submitEvidence} 
+              className={`btn-submit-evidence relative overflow-hidden ${evidenceCooldown > 0 ? 'cursor-not-allowed opacity-80' : ''}`}
+              disabled={evidenceCooldown > 0}
+              aria-label="Submit Evidence"
+            >
+              <div className="relative z-10">
+                {evidenceCooldown > 0 ? `SYNCING [${Math.ceil(evidenceCooldown)}S]` : "SUBMIT"}
+              </div>
+              {evidenceCooldown > 0 && (
+                <motion.div 
+                  className="absolute bottom-0 left-0 w-full bg-white/20 z-0"
+                  initial={{ height: "0%" }}
+                  animate={{ height: `${(evidenceCooldown / EVIDENCE_COOLDOWN_TIME) * 100}%` }}
+                  transition={{ duration: 0.1, ease: "linear" }}
+                />
+              )}
+            </button>
           </div>
         )}
 
@@ -92,7 +139,19 @@ export default function CourtOverlay({ logs, evidence, isMuted, onToggleMute, on
             initial={{ x: 50, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
           >
-            <div className="evidence-text">{ev.text}</div>
+            <div className="flex justify-between items-start">
+               <div className="evidence-text">{ev.text}</div>
+               {isJudge && (
+                 <button 
+                   onClick={() => onDeleteEvidence(ev.id)}
+                   className="btn-delete-evidence"
+                   title="Remove Evidence"
+                   aria-label="Delete Evidence"
+                 >
+                   ✕
+                 </button>
+               )}
+            </div>
             <div className="evidence-author">- {ev.author}</div>
           </motion.div>
         ))}
@@ -101,10 +160,25 @@ export default function CourtOverlay({ logs, evidence, isMuted, onToggleMute, on
       {/* OBJECTION BUTTON (Floating) */}
       <div className="objection-btn-wrapper">
         <div className="text-[0.6rem] font-bold text-red-500 mb-1 tracking-[3px] text-right font-mono animate-pulse">
-          EMERGENCY OVERRIDE
+          {objectionCooldown > 0 ? `RECHARGING SYSTEM [${Math.ceil(objectionCooldown)}s]` : "EMERGENCY OVERRIDE"}
         </div>
-        <button onClick={onObjection} className="btn-objection group">
-           <div className="objection-bubble">OBJECTION!</div>
+        <button 
+          onClick={handleObjection} 
+          className={`btn-objection group ${objectionCooldown > 0 ? 'cursor-not-allowed' : ''}`}
+          disabled={objectionCooldown > 0}
+          aria-label="Call Objection!"
+        >
+           <div className="objection-bubble relative overflow-hidden">
+              <span className="relative z-10">{objectionCooldown > 0 ? "..." : "OBJECTION!"}</span>
+              {objectionCooldown > 0 && (
+                <motion.div 
+                  className="absolute bottom-0 left-0 w-full bg-red-500/30 z-0"
+                  initial={{ height: "0%" }}
+                  animate={{ height: `${(objectionCooldown / OBJECTION_COOLDOWN_TIME) * 100}%` }}
+                  transition={{ duration: 0.1, ease: "linear" }}
+                />
+              )}
+           </div>
         </button>
       </div>
     </>

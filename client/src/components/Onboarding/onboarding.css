@@ -1,0 +1,70 @@
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 15000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.onboarding-card {
+  background: #050505;
+  border: 1px solid var(--neon-blue);
+  padding: 40px;
+  max-width: 400px;
+  width: 100%;
+  clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
+  box-shadow: 0 0 50px rgba(0, 243, 255, 0.2);
+  position: relative;
+}
+
+.onboarding-card::before {
+  content: "";
+  position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
+}
+
+.step-counter {
+  font-family: 'Share Tech Mono';
+  font-size: 0.7rem;
+  color: var(--neon-blue);
+  letter-spacing: 2px;
+  margin-bottom: 15px;
+}
+
+.step-title {
+  font-family: 'Orbitron';
+  font-size: 1.5rem;
+  color: #fff;
+  margin-bottom: 20px;
+  letter-spacing: 2px;
+}
+
+.step-description {
+  font-family: 'Rajdhani';
+  color: #ccc;
+  line-height: 1.6;
+  margin-bottom: 30px;
+}
+
+.step-btn {
+  width: 100%;
+  background: var(--neon-blue);
+  color: #000;
+  border: none;
+  padding: 12px;
+  font-family: 'Orbitron';
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s;
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px);
+}
+
+.step-btn:hover {
+  filter: brightness(1.2);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 243, 255, 0.4);
+}

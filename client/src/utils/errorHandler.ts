@@ -1,12 +1,12 @@
 export class ErrorHandler {
-  static handleSDKError(error: any): string {
+  static handleSDKError(error: unknown): string {
     console.error("Discord SDK Error:", error);
-    return error.message || "Failed to interact with Discord SDK.";
+    return error instanceof Error ? error.message : "Failed to interact with Discord SDK.";
   }
 
-  static handleAPIError(error: any): string {
+  static handleAPIError(error: unknown): string {
     console.error("API Error:", error);
-    return error.message || "Failed to communicate with the server.";
+    return error instanceof Error ? error.message : "Failed to communicate with the server.";
   }
 
   static handleWebSocketError(error: Event): string {
@@ -14,8 +14,8 @@ export class ErrorHandler {
     return "Connection to the game server was lost.";
   }
 
-  static handleGenericError(error: any): string {
+  static handleGenericError(error: unknown): string {
     console.error("Application Error:", error);
-    return error.message || "An unexpected error occurred.";
+    return error instanceof Error ? error.message : "An unexpected error occurred.";
   }
 }

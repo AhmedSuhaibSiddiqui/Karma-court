@@ -4,8 +4,16 @@ import Courtroom from './components/Courtroom';
 import CourtOverlay from './components/CourtOverlay';
 import LoadingScreen from './components/LoadingScreen';
 import MobileNotice from './components/MobileNotice';
+import Onboarding from './components/Onboarding/Onboarding';
 
 import { ErrorHandler } from './utils/errorHandler';
+import { useFeedback } from './hooks/useFeedback';
+import { Analytics } from './services/analytics';
+import { useAccessibility } from './hooks/useAccessibility';
+import { useRenderCount, PerformanceService } from './services/performance';
+import { QualityAssurance } from './tests/sanityChecks';
+import type { DiscordUser, GameState } from './types/game';
+
 import './App.css';
 
 // --- SDK INITIALIZATION ---
@@ -22,7 +30,7 @@ if (location.search.includes("frame_id")) {
 }
 
 // Default Game State
-const INITIAL_STATE = {
+const INITIAL_STATE: GameState = {
   votes: { guilty: 0, innocent: 0 },
   voters: [],
   crime: "",
@@ -31,24 +39,30 @@ const INITIAL_STATE = {
   accused: { username: "Unknown", avatar: null },
   witness: { username: null, avatar: null },
   evidence: [],
-  logs: []
+  logs: [],
+  sentence: null,
+  timer: 0
 };
 
+interface AuthData {
+  user: DiscordUser;
+  access_token: string;
+}
+
 function App() {
-  const [auth, setAuth] = useState<any>(null);
+  const { showToast, showError: showToastError } = useFeedback();
+  useAccessibility();
+  useRenderCount('App');
+
+  const [auth, setAuth] = useState<AuthData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('karma_court_onboarded'));
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const didAuth = useRef(false);
 
-  // GAME STATE
-  const [gameState, setGameState] = useState<any>(INITIAL_STATE);
-  const [isShaking, setIsShaking] = useState(false);
-  const [showObjection, setShowObjection] = useState<string | null>(null);
-  const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 800);
-  
   // Handle Resize for Mobile Check
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 800);
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -61,6 +75,11 @@ function App() {
   useEffect(() => {
     localStorage.setItem('karma_court_mute', String(isMuted));
   }, [isMuted]);
+
+  const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
+  const [isShaking, setIsShaking] = useState(false);
+  const [showObjection, setShowObjection] = useState<string | null>(null);
+  const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
 
   const ws = useRef<WebSocket | null>(null);
 
@@ -134,17 +153,18 @@ function App() {
             console.error("Voice Subscription Warning:", e);
         }
 
-      } catch (e: any) {
+      } catch (e: unknown) {
         const errorMsg = ErrorHandler.handleAPIError(e);
         didAuth.current = false;
-        if (!e.message?.includes("Already authing")) {
+        if (e instanceof Error && !e.message?.includes("Already authing")) {
             setError(errorMsg);
+            showToastError(e);
         }
       }
     };
     
     setup();
-  }, []);
+  }, [showToastError]);
 
   // --- WEBSOCKET & GAME LOGIC ---
   useEffect(() => {
@@ -168,14 +188,26 @@ function App() {
 
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      if (message.type === "update") setGameState(message.data);
+      if (message.type === "update") {
+        setGameState((prev: GameState) => PerformanceService.getOptimizedGameState(prev, message.data));
+        if (message.data.verdict) {
+          Analytics.trackEvent('verdict_delivered', { verdict: message.data.verdict });
+        }
+      }
       if (message.type === "sound") playSound(message.sound);
-      if (message.type === "objection_event") triggerObjectionEffect(message.username);
+      if (message.type === "error") {
+        showToast(message.message, 'error');
+      }
+      if (message.type === "objection_event") {
+        Analytics.trackEvent('objection_called', { user: message.username });
+        triggerObjectionEffect(message.username);
+        showToast(`OBJECTION by ${message.username}`, 'warning');
+      }
     };
 
     ws.current = socket;
     return () => socket.close();
-  }, [auth]);
+  }, [auth, showToast]);
 
   const playSound = (soundName: string) => {
     const audio = new Audio(`/sounds/${soundName}.mp3`);
@@ -190,8 +222,23 @@ function App() {
     setTimeout(() => setShowObjection(null), 2000);
   };
 
-  const sendAction = (payload: any) => {
+  const sendAction = (payload: { type: string; [key: string]: unknown }) => {
+    if (payload.type === 'vote') {
+      Analytics.trackEvent('vote_cast', { vote: payload.vote });
+      showToast(`Vote cast: ${payload.vote as string}`, 'success');
+    }
+    if (payload.type === 'add_evidence') {
+      Analytics.trackEvent('evidence_added');
+      showToast('Evidence submitted to database.', 'info');
+    }
     ws.current?.send(JSON.stringify(payload));
+  };
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('karma_court_onboarded', 'true');
+    setShowOnboarding(false);
+    Analytics.trackEvent('game_start');
+    QualityAssurance.runSanityChecks(gameState);
   };
 
   if (!discordSdk || error) {
@@ -211,6 +258,7 @@ function App() {
 
   return (
     <>
+      {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
       <Courtroom 
         currentUser={auth.user}
         discordSdk={discordSdk!}
@@ -233,8 +281,10 @@ function App() {
         logs={gameState.logs}
         evidence={gameState.evidence}
         isMuted={isMuted}
+        isJudge={gameState.judge_id === auth.user.id}
         onToggleMute={() => setIsMuted(!isMuted)}
         onAddEvidence={(text) => sendAction({ type: 'add_evidence', text, username: auth.user.username })}
+        onDeleteEvidence={(id) => sendAction({ type: 'delete_evidence', id })}
         onObjection={() => sendAction({ type: 'objection', username: auth.user.username })}
       />
     </>

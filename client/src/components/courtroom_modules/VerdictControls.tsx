@@ -44,6 +44,7 @@ export default function VerdictControls({
                 onClick={onCallVerdict} 
                 className={`btn-call-verdict mt-2 ${isExecutionDisabled ? 'disabled' : ''}`}
                 disabled={isExecutionDisabled}
+                aria-label="Execute Final Verdict"
                >
                   <span>⚖ EXECUTE</span>
                </button>
@@ -68,6 +69,7 @@ export default function VerdictControls({
           className={`btn-cyber btn-vote-guilty ${userVote === 'guilty' ? 'active' : ''} ${!canVote && userVote !== 'guilty' ? 'disabled' : ''}`}
           onClick={() => canVote && onVote('guilty')}
           disabled={!canVote}
+          aria-label="Vote Guilty"
         >
           <div className="btn-content">
             <span className="icon">☠</span>
@@ -80,6 +82,7 @@ export default function VerdictControls({
           className={`btn-cyber btn-vote-innocent ${userVote === 'innocent' ? 'active' : ''} ${!canVote && userVote !== 'innocent' ? 'disabled' : ''}`}
           onClick={() => canVote && onVote('innocent')}
           disabled={!canVote}
+          aria-label="Vote Innocent"
         >
           <div className="btn-content">
             <span className="icon">☺</span>

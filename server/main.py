@@ -7,7 +7,9 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from typing import List, Dict, Optional
 import json
+import time
 from utils.error_handler import handle_error, log_info
+from utils.security import SecurityService
 
 # 1. Load Secrets
 load_dotenv()
@@ -30,12 +32,18 @@ class GameManager:
         self.active_connections: List[WebSocket] = []
         self.user_map: Dict[WebSocket, str] = {} # Map WS -> user_id
         self._timer_task: Optional[asyncio.Task] = None
+        
+        # Security: Rate Limiting
+        self.last_objection_time = 0
+        self.user_last_action: Dict[str, float] = {} # user_id -> timestamp
+        
         self.state = {
             "votes": {"guilty": 0, "innocent": 0},
             "crime": "",
             "verdict": None, # 'guilty' | 'innocent' | None
             "judge_id": None,
             "accused": {
+                "id": None,
                 "username": "Unknown",
                 "avatar": None
             },
@@ -109,6 +117,25 @@ class GameManager:
             "Forced to listen to 1 hour of elevator music"
         ]
 
+        self.severe_sentences = [
+            "BANNED: Must use only 'Meow' in chat for 24 hours.",
+            "EXILE: Forbidden from entering Voice Chat for 3 days.",
+            "SHAME: Must post a 500-word essay on why they are a coward.",
+            "TOTAL LOCKDOWN: Forced to use a 'Pig' avatar for 1 week.",
+            "COMMUNITY SERVICE: Must clean (moderate) the #general chat for 12 hours.",
+            "PUBLIC EXECUTION: Judge can ban them from one specific channel for 24h.",
+            "PERMANENT STIGMA: Must keep status as 'I LOST TO THE SYSTEM' for 48h.",
+            "DIGITAL DEBT: Must react with a 🤡 to every message the Judge sends for a week.",
+            "VOICE REVEAL: Must read the entire Discord Terms of Service out loud in VC.",
+            "IDENTITY THEFT: Judge picks a new embarrassing nickname for them for 7 days.",
+            "GHOSTED: Entire squad is forbidden from replying to them for 2 hours.",
+            "THE GAUNTLET: Must play a game of the Judge's choice until they win 3 times.",
+            "SOCIAL BANKRUPTCY: Must gift 1 server boost or post a cringe video dance.",
+            "LABOR CAMP: Must invite 5 new bots to their personal test server and configure them.",
+            "MEMORY WIPE: Must delete their most recent 100 messages in the server.",
+            "TRIAL BY FIRE: Must solo-stream a horror game for 1 hour while the squad watches."
+        ]
+
     async def connect(self, websocket: WebSocket, user_id: str):
         await websocket.accept()
         self.active_connections.append(websocket)
@@ -142,6 +169,18 @@ class GameManager:
                     self._cancel_timer()
                     self._log("Judge disconnected. Court adjourned.", "system")
             
+            # --- CONTEMPT OF COURT PROTOCOL ---
+            # If the ACCUSED leaves while the trial is ACTIVE (no verdict yet)
+            if user_id == self.state["accused"].get("id") and self.state["verdict"] is None:
+                import random
+                self.state["verdict"] = "guilty"
+                punishment = random.choice(self.severe_sentences)
+                self.state["sentence"] = punishment
+                self._cancel_timer()
+                self._log(f"CONTEMPT OF COURT! {self.state['accused']['username']} fled. AUTOMATIC GUILTY.", "alert")
+                self._log(f"SEVERE SENTENCE: {punishment}", "alert")
+                await self.broadcast({"type": "sound", "sound": "gavel"})
+
             # Broadcast updated state so everyone knows (e.g. if Judge changed)
             await self.broadcast({"type": "update", "data": self.state})
 
@@ -229,7 +268,12 @@ class GameManager:
         
         # 2. Updating the Crime Text
         elif msg_type == "update_crime":
-            self.state["crime"] = message.get("crime")
+            crime_text = message.get("crime", "")
+            if SecurityService.is_clean(crime_text):
+                self.state["crime"] = SecurityService.sanitize(crime_text)
+            else:
+                # Optionally notify the user or just ignore
+                pass
             
         # 2.5 Generate AI Crime
         elif msg_type == "generate_crime":
@@ -242,7 +286,10 @@ class GameManager:
         # 3. Accusing a User (Judge Only)
         elif msg_type == "accuse_user":
             if user_id == self.state["judge_id"]:
-                self.state["accused"] = message.get("user")
+                user_data = message.get("user")
+                self.state["accused"] = user_data
+                # Ensure the ID is explicitly handled if present in payload
+                self.state["accused"]["id"] = user_data.get("id") 
                 # Reset round
                 self.state["votes"] = {"guilty": 0, "innocent": 0}
                 self.state["voters"] = [] # Reset voters
@@ -297,6 +344,13 @@ class GameManager:
 
         # 6. OBJECTION! (Anyone)
         elif msg_type == "objection":
+            # 10 second global cooldown for objections
+            now = time.time()
+            if now - self.last_objection_time < 10:
+                return 
+            
+            self.last_objection_time = now
+            
             # Broadcast the objection event immediately for visual effects
             await self.broadcast({
                 "type": "objection_event", 
@@ -305,18 +359,40 @@ class GameManager:
             })
             await self.broadcast({"type": "sound", "sound": "objection"})
             self._log(f"OBJECTION! by {username}", "objection")
-            return # Special case: we also want to send the update, so continue below
+            # Continue to broadcast state update so the log entry appears live
 
         # 7. Add Evidence
         elif msg_type == "add_evidence":
+            # 3 second per-user cooldown
+            now = time.time()
+            last_action = self.user_last_action.get(user_id, 0)
+            if now - last_action < 3:
+                return
+            
+            evidence_text = message.get("text", "")
+            
+            # Security: Profanity & Sanitization
+            if not SecurityService.is_clean(evidence_text):
+                await self.broadcast({"type": "error", "message": "Evidence rejected: Inappropriate content detected."})
+                return
+            
+            self.user_last_action[user_id] = now
+            
             new_evidence = {
                 "id": len(self.state["evidence"]) + 1,
-                "text": message.get("text"),
+                "text": SecurityService.sanitize(evidence_text),
                 "author": username
             }
             self.state["evidence"].append(new_evidence)
             await self.broadcast({"type": "sound", "sound": "evidence"})
             self._log(f"Evidence submitted by {username}", "evidence")
+
+        # 8. Delete Evidence (Judge Only)
+        elif msg_type == "delete_evidence":
+            if user_id == self.state["judge_id"]:
+                evidence_id = message.get("id")
+                self.state["evidence"] = [e for e in self.state["evidence"] if e["id"] != evidence_id]
+                self._log("Evidence removed by Judge moderation.", "system")
 
         # Send updated state to everyone
         await self.broadcast({"type": "update", "data": self.state})

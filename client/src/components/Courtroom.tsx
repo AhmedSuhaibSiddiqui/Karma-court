@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef} from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DiscordSDK } from "@discord/embedded-app-sdk";
@@ -7,26 +7,8 @@ import CourtHeader from './courtroom_modules/CourtHeader';
 import Dock from './courtroom_modules/Dock';
 import VerdictControls from './courtroom_modules/VerdictControls';
 import AudienceGallery from './courtroom_modules/AudienceGallery';
+import type { DiscordUser, GameState } from '../types/game';
 import './courtroom.css';
-
-interface DiscordUser {
-  id: string;
-  username: string;
-  discriminator: string;
-  avatar: string | null;
-}
-
-interface GameState {
-  votes: { guilty: number; innocent: number };
-  voters: string[];
-  crime: string;
-  verdict: 'guilty' | 'innocent' | null;
-  sentence: string | null;
-  judge_id: string | null;
-  accused: { username: string; avatar: string | null };
-  witness: { username: string | null; avatar: string | null };
-  timer: number;
-}
 
 interface CourtroomProps {
   currentUser: DiscordUser;
@@ -42,8 +24,8 @@ interface CourtroomProps {
   onCallVerdict: () => void;
   onPassSentence: () => void;
   onNextCase: () => void;
-  onAccuseUser: (user: any) => void;
-  onCallWitness: (user: any) => void;
+  onAccuseUser: (user: Partial<DiscordUser>) => void;
+  onCallWitness: (user: Partial<DiscordUser>) => void;
 }
 
 export default function Courtroom({
@@ -64,7 +46,7 @@ export default function Courtroom({
   onCallWitness
 }: CourtroomProps) {
   const [selectionMode, setSelectionMode] = useState<'accused' | 'witness' | null>(null);
-  const [participants, setParticipants] = useState<any[]>([]);
+  const [participants, setParticipants] = useState<DiscordUser[]>([]);
   const [errorPopup, setErrorPopup] = useState<string | null>(null);
   
   // Audio Interaction Gate
@@ -74,7 +56,7 @@ export default function Courtroom({
   const [localCrime, setLocalCrime] = useState(gameState.crime);
   const crimeDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync Local State
+  // Sync Local State when server forces a crime update (e.g. AI Generate)
   useEffect(() => {
     setLocalCrime(gameState.crime);
   }, [gameState.crime]);
@@ -93,11 +75,12 @@ export default function Courtroom({
     const fetchParticipants = async () => {
         try {
             const channel = await discordSdk.commands.getInstanceConnectedParticipants();
-            let users = channel.participants || [];
+            const usersFromSdk = (channel.participants || []) as unknown as DiscordUser[];
+            const users = [...usersFromSdk];
             
             // Ensure current user is in the list
-            if (!users.find((p: any) => p.id === currentUser.id)) {
-                users = [...users, currentUser];
+            if (!users.find((p: DiscordUser) => p.id === currentUser.id)) {
+                users.push(currentUser);
             }
             setParticipants(users);
         } catch (e) {
@@ -106,7 +89,6 @@ export default function Courtroom({
         }
     };
     fetchParticipants();
-    // Poll every 5s to keep gallery updated? Or just on load/interaction.
     const interval = setInterval(fetchParticipants, 5000);
     return () => clearInterval(interval);
   }, [discordSdk, currentUser]);
@@ -118,6 +100,7 @@ export default function Courtroom({
     if (crimeDebounce.current) clearTimeout(crimeDebounce.current);
     crimeDebounce.current = setTimeout(() => {
       onUpdateCrime(newVal);
+      crimeDebounce.current = null;
     }, 500);
   };
 
@@ -125,7 +108,7 @@ export default function Courtroom({
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const currentTrackRef = useRef<string | null>(null);
 
-  // 1. Resume Audio on Interaction (The "Join" Click)
+  // 1. Resume Audio on Interaction
   useEffect(() => {
     if (hasInteracted && bgmRef.current) {
       bgmRef.current.play().catch(() => {});
@@ -135,7 +118,6 @@ export default function Courtroom({
   // 2. Track Switching Logic
   useEffect(() => {
     const playTrack = (trackName: string) => {
-      // STOP if already playing this track to prevent audio glitches/restarts
       if (currentTrackRef.current === trackName) return;
       
       if (bgmRef.current) {
@@ -157,9 +139,7 @@ export default function Courtroom({
       newAudio.volume = 0;
       newAudio.muted = isMutedRef.current;
       
-      newAudio.play().catch(() => {
-        // Autoplay waiting for interaction...
-      });
+      newAudio.play().catch(() => {});
       
       let volIn = 0;
       const fadeIn = setInterval(() => {
@@ -176,14 +156,13 @@ export default function Courtroom({
     };
 
     if (gameState.verdict) {
-      // Fallback to trial_theme if verdict_tension is missing, or keep trial theme playing
       playTrack('trial_theme'); 
     } else if (gameState.accused.username !== "Unknown") {
       playTrack('trial_theme');
     } else {
       playTrack('lobby_theme');
     }
-  }, [gameState.verdict, gameState.crime]);
+  }, [gameState.verdict, gameState.accused.username]);
 
   // --- JUDGE ACTIONS ---
   const isJudge = gameState.judge_id === currentUser.id;
@@ -191,13 +170,14 @@ export default function Courtroom({
   const openSelectionModal = async (mode: 'accused' | 'witness') => {
     if (!isJudge) return;
     const channel = await discordSdk.commands.getInstanceConnectedParticipants();
-    setParticipants(channel.participants);
+    setParticipants((channel.participants as unknown as DiscordUser[]) || []);
     setSelectionMode(mode);
   };
 
-  const handleSelection = (user: any) => {
-    const userPayload = { 
-      username: user.username || user.global_name, 
+  const handleSelection = (user: DiscordUser) => {
+    const userPayload: Partial<DiscordUser> = { 
+      id: user.id,
+      username: user.username || user.global_name || 'Unknown', 
       avatar: user.avatar 
         ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=256`
         : "https://cdn.discordapp.com/embed/avatars/0.png"
@@ -214,19 +194,20 @@ export default function Courtroom({
   // --- VOTING LOGIC ---
   const [myVote, setMyVote] = useState<'guilty' | 'innocent' | null>(null);
 
+  // If voters is empty, reset my local vote visually
+  const isUnknown = gameState.accused.username === "Unknown";
+  const hasVoted = (gameState.voters || []).includes(currentUser.id) || (gameState.voters.length > 0 && myVote !== null);
+  
+  // Clean up myVote state when a new round starts
   useEffect(() => {
-    if ((gameState.voters || []).length === 0) {
-      setMyVote(null);
-    }
-  }, [gameState.voters]);
+    setMyVote(prev => gameState.voters.length === 0 ? null : prev);
+  }, [gameState.voters.length]);
 
   const handleVote = (type: 'guilty' | 'innocent') => {
     onVote(type);
     setMyVote(type);
   };
 
-  const isUnknown = gameState.accused.username === "Unknown";
-  const hasVoted = (gameState.voters || []).includes(currentUser.id) || myVote !== null;
   const canVote = !isUnknown && !hasVoted;
   const isExecutionDisabled = isUnknown || !gameState.crime || gameState.crime.trim() === "";
 
@@ -316,6 +297,7 @@ export default function Courtroom({
                     <img 
                       src={p.avatar ? `https://cdn.discordapp.com/avatars/${p.id}/${p.avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png"} 
                       className="user-avatar-small" 
+                      alt="User"
                     />
                     <span className="user-name-small">{p.username || p.global_name}</span>
                   </button>
@@ -368,7 +350,6 @@ export default function Courtroom({
            <motion.div 
             className="verdict-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => isJudge && onNextCase()}
            >
               <div className="sentence-card">
                   <h2 className="sentence-title">PUNISHMENT DECREED</h2>
