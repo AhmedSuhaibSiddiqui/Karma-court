@@ -13,8 +13,12 @@ export default function CourtHeader({ crime, isJudge, onCrimeChange, onGenerateC
   return (
     <div className="court-header">
       <div className="cyber-lines-top"></div>
-      <div className="warning-wrapper">
-        <span className="glitch-text" data-text="⚠ COURT IN SESSION ⚠">⚠ COURT IN SESSION ⚠</span>
+      
+      {/* Top Bar */}
+      <div className="flex justify-between w-full max-w-[600px] items-center relative z-20">
+         <div className="warning-wrapper">
+            <span className="glitch-text" data-text="⚠ COURT IN SESSION ⚠">⚠ COURT IN SESSION ⚠</span>
+         </div>
       </div>
       
       <motion.div 

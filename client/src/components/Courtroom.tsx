@@ -35,6 +35,7 @@ interface CourtroomProps {
   isShaking: boolean;
   showObjection: string | null;
   speakingUsers: Set<string>;
+  isMuted: boolean;
   onVote: (type: 'guilty' | 'innocent') => void;
   onUpdateCrime: (crime: string) => void;
   onGenerateCrime: () => void;
@@ -52,6 +53,7 @@ export default function Courtroom({
   isShaking,
   showObjection,
   speakingUsers,
+  isMuted,
   onVote,
   onUpdateCrime,
   onGenerateCrime,
@@ -63,6 +65,7 @@ export default function Courtroom({
 }: CourtroomProps) {
   const [selectionMode, setSelectionMode] = useState<'accused' | 'witness' | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
+  const [errorPopup, setErrorPopup] = useState<string | null>(null);
   
   // Audio Interaction Gate
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -75,22 +78,38 @@ export default function Courtroom({
   useEffect(() => {
     setLocalCrime(gameState.crime);
   }, [gameState.crime]);
+  
+  // Sync Mute State to Music
+  const isMutedRef = useRef(isMuted);
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+    if (bgmRef.current) {
+      bgmRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
 
   // Sync Participants List periodically or once
   useEffect(() => {
     const fetchParticipants = async () => {
         try {
             const channel = await discordSdk.commands.getInstanceConnectedParticipants();
-            setParticipants(channel.participants);
+            let users = channel.participants || [];
+            
+            // Ensure current user is in the list
+            if (!users.find((p: any) => p.id === currentUser.id)) {
+                users = [...users, currentUser];
+            }
+            setParticipants(users);
         } catch (e) {
             console.warn("Failed to fetch participants", e);
+            setParticipants([currentUser]);
         }
     };
     fetchParticipants();
     // Poll every 5s to keep gallery updated? Or just on load/interaction.
     const interval = setInterval(fetchParticipants, 5000);
     return () => clearInterval(interval);
-  }, [discordSdk]);
+  }, [discordSdk, currentUser]);
 
   const handleCrimeChange = (e: ChangeEvent<HTMLInputElement>) => {
     const newVal = e.target.value;
@@ -135,9 +154,10 @@ export default function Courtroom({
       const newAudio = new Audio(`/sounds/${trackName}.mp3`);
       newAudio.loop = true;
       newAudio.volume = 0;
+      newAudio.muted = isMutedRef.current;
       
       newAudio.play().catch(() => {
-        console.log("Autoplay waiting for interaction...");
+        // Autoplay waiting for interaction...
       });
       
       let volIn = 0;
@@ -207,11 +227,36 @@ export default function Courtroom({
   const isUnknown = gameState.accused.username === "Unknown";
   const hasVoted = (gameState.voters || []).includes(currentUser.id) || myVote !== null;
   const canVote = !isUnknown && !hasVoted;
-  const isExecutionDisabled = isUnknown || gameState.crime === "Waiting for accusation..." || !gameState.crime || gameState.crime.trim() === "";
+  const isExecutionDisabled = isUnknown || !gameState.crime || gameState.crime.trim() === "";
+
+  const handleExecuteAttempt = () => {
+      if (isExecutionDisabled) {
+          setErrorPopup("ERROR: PROTOCOL HALTED. DEFENDANT OR ACCUSATION MISSING.");
+          setTimeout(() => setErrorPopup(null), 3000);
+      } else {
+          onCallVerdict();
+      }
+  };
+
+  // Dynamic Background Logic
+  const isTrialActive = !isUnknown && !gameState.verdict;
+  const isUrgent = isTrialActive && gameState.timer <= 10;
+  
+  let bgClass = "";
+  if (isTrialActive) {
+      bgClass = "trial-active";
+      if (gameState.votes.guilty > gameState.votes.innocent) bgClass += " lead-guilty";
+      if (gameState.votes.innocent > gameState.votes.guilty) bgClass += " lead-innocent";
+      if (isUrgent) bgClass += " tension-pulse";
+  }
 
   return (
-    <div className={`courtroom-container ${isShaking ? 'shake-screen' : ''}`}>
+    <div className={`courtroom-container ${bgClass} ${isShaking ? 'shake-screen' : ''}`}>
       
+      {/* BACKGROUND LAYERS */}
+      <div className="cyber-grid-bg"></div>
+      <div className="tension-overlay"></div>
+
       <AnimatePresence>
         {!hasInteracted && (
           <motion.div
@@ -220,6 +265,19 @@ export default function Courtroom({
             style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
           >
              <LandingScreen onJoin={() => setHasInteracted(true)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {errorPopup && (
+          <motion.div 
+            className="error-popup"
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -50, opacity: 0 }}
+          >
+            ⚠ {errorPopup}
           </motion.div>
         )}
       </AnimatePresence>
@@ -235,7 +293,10 @@ export default function Courtroom({
           >
             <div className="flex flex-col items-center">
                <h1 className="objection-text-img">OBJECTION!</h1>
-               <h2 className="text-2xl font-bold bg-black/50 px-4 rounded text-white">{showObjection}</h2>
+               <div className="objection-author-box">
+                  <span className="objection-author-label">CALLED BY</span>
+                  <span className="objection-author-name">{showObjection}</span>
+               </div>
             </div>
           </motion.div>
         )}
@@ -247,7 +308,9 @@ export default function Courtroom({
             <div className="modal-box">
               <h3 className="modal-title">SELECT {selectionMode === 'accused' ? 'THE ACCUSED' : 'A WITNESS'}</h3>
               <div className="user-grid">
-                {participants.map(p => (
+                {participants
+                  .filter(p => (selectionMode === 'accused' && participants.length > 1) ? p.id !== currentUser.id : true)
+                  .map(p => (
                   <button key={p.id} onClick={() => handleSelection(p)} className="user-card">
                     <img 
                       src={p.avatar ? `https://cdn.discordapp.com/avatars/${p.id}/${p.avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png"} 
@@ -309,7 +372,14 @@ export default function Courtroom({
               <div className="sentence-card">
                   <h2 className="sentence-title">PUNISHMENT DECREED</h2>
                   <p className="sentence-text">{gameState.sentence}</p>
-                  {isJudge && <p className="mt-4 text-xs text-slate-400 text-center">Click to Close Case</p>}
+                  {isJudge && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onNextCase(); }} 
+                      className="btn-next-case mt-6"
+                    >
+                      CLOSE CASE &gt;&gt;
+                    </button>
+                  )}
               </div>
            </motion.div>
         )}
@@ -346,7 +416,7 @@ export default function Courtroom({
             timer={gameState.timer}
             isExecutionDisabled={isExecutionDisabled}
             onVote={handleVote}
-            onCallVerdict={onCallVerdict}
+            onCallVerdict={handleExecuteAttempt}
          />
          
          <AudienceGallery 

@@ -1,0 +1,16 @@
+{
+  "name": "Karma Court",
+  "short_name": "KarmaCourt",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#00f3ff",
+  "description": "A cyberpunk mock trial Activity for Discord.",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

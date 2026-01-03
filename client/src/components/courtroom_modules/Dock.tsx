@@ -49,15 +49,15 @@ export default function Dock({
       {/* WITNESS STAND (Floating Left) */}
       <div className="witness-container">
           <div 
-            className={`witness-hex ${isJudge ? 'interactive' : ''} ${witness?.username ? 'active-witness' : ''}`}
+            className={`witness-box ${isJudge ? 'interactive' : ''} ${witness?.username ? 'active-witness' : ''}`}
             onClick={onSelectWitness}
           >
              {witness?.avatar ? (
-               <img src={witness.avatar} className="witness-avatar" />
+               <img src={witness.avatar} className="witness-avatar" alt="Witness" />
              ) : (
                <div className="witness-placeholder">?</div>
              )}
-             <div className="witness-border"></div>
+             <div className="witness-ring"></div>
           </div>
           <p className="witness-label">{witness?.username || "NO WITNESS"}</p>
       </div>
@@ -91,7 +91,11 @@ export default function Dock({
             {accused.username}
           </h1>
           <div className="status-badge">
-             {isJudge ? ">>> AUTH: JUDGE <<<" : `JUDGE: ${judgeId === currentUserId ? "YOU" : "PRESENT"}`}
+            {isJudge ? (
+              <span className="judge-auth-text" data-text=">>> AUTH: JUDGE <<<"></span>
+            ) : (
+              <span>JUDGE: {judgeId === currentUserId ? "YOU" : "PRESENT"}</span>
+            )}
           </div>
         </div>
       </div>

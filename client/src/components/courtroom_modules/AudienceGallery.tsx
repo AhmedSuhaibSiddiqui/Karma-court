@@ -23,7 +23,7 @@ export default function AudienceGallery({ participants, speakingUsers, judgeId }
       </div>
       
       <div className="gallery-grid">
-        {sortedParticipants.map((p) => {
+        {sortedParticipants.map((p, index) => {
           const isSpeaking = speakingUsers.has(p.id);
           const isJudge = p.id === judgeId;
           const avatarUrl = p.avatar 
@@ -37,6 +37,8 @@ export default function AudienceGallery({ participants, speakingUsers, judgeId }
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ type: 'spring' }}
+              // @ts-ignore
+              style={{ "--i": index }}
             >
               <div className="gallery-avatar-wrapper">
                  <img src={avatarUrl} alt={p.username} className="gallery-avatar" />

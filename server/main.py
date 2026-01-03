@@ -32,7 +32,7 @@ class GameManager:
         self._timer_task: Optional[asyncio.Task] = None
         self.state = {
             "votes": {"guilty": 0, "innocent": 0},
-            "crime": "Waiting for accusation...",
+            "crime": "",
             "verdict": None, # 'guilty' | 'innocent' | None
             "judge_id": None,
             "accused": {
@@ -87,7 +87,7 @@ class GameManager:
             "Must post a cringe selfie",
             "Cannot speak for 3 rounds",
             "Must compliment the Judge for 1 minute",
-            " sentenced to play League of Legends",
+            "Sentenced to play League of Legends",
             "Publicly shamed in #announcements",
             "Must end every sentence with 'uwu' for 1 hour",
             "Forced to use a default Discord avatar for a week",
@@ -97,7 +97,16 @@ class GameManager:
             "Must write a haiku about their crime",
             "Sentenced to be the server's personal butler for a day",
             "Must react to every message with a clown emoji",
-            "Forced to stream their desktop while organizing it"
+            "Forced to stream their desktop while organizing it",
+            "Must use 'Comic Sans' logic in all arguments",
+            "Cannot say the word 'the' for 10 minutes",
+            "Must send a heartfelt apology to a bot",
+            "Required to narrate their own actions in 3rd person",
+            "Banned from sharing memes for 48 hours",
+            "Must wear a virtual 'Cone of Shame' (Status)",
+            "Sentenced to explain FNAF lore to the chat",
+            "Must reply with a GIF to every message for 10m",
+            "Forced to listen to 1 hour of elevator music"
         ]
 
     async def connect(self, websocket: WebSocket, user_id: str):
@@ -113,7 +122,7 @@ class GameManager:
         # Send current state immediately
         await websocket.send_text(json.dumps({"type": "update", "data": self.state}))
 
-    def disconnect(self, websocket: WebSocket):
+    async def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             user_id = self.user_map.get(websocket)
             self.active_connections.remove(websocket)
@@ -132,6 +141,9 @@ class GameManager:
                     self.state["judge_id"] = None
                     self._cancel_timer()
                     self._log("Judge disconnected. Court adjourned.", "system")
+            
+            # Broadcast updated state so everyone knows (e.g. if Judge changed)
+            await self.broadcast({"type": "update", "data": self.state})
 
     async def broadcast(self, message: dict):
         for connection in self.active_connections:
@@ -237,7 +249,7 @@ class GameManager:
                 self.state["verdict"] = None
                 self.state["sentence"] = None
                 self.state["evidence"] = [] # Clear evidence for new case
-                self.state["crime"] = self.state["crime"] if self.state["crime"] != "Waiting for accusation..." else "Enter new accusation..."
+                self.state["crime"] = self.state["crime"] if self.state["crime"] != "" else ""
                 # Reset witness too
                 self.state["witness"] = {"username": None, "avatar": None}
                 
@@ -277,7 +289,7 @@ class GameManager:
                 self.state["verdict"] = None
                 self.state["sentence"] = None
                 self.state["evidence"] = []
-                self.state["crime"] = "Enter new accusation..."
+                self.state["crime"] = ""
                 self.state["witness"] = {"username": None, "avatar": None}
                 self.state["accused"] = {"username": "Unknown", "avatar": None}
                 self.state["timer"] = 60 # Reset visual timer
@@ -371,9 +383,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = "anon", instan
             except Exception as e:
                  handle_error(e, "handle_message")
     except WebSocketDisconnect:
-        game.disconnect(websocket)
+        await game.disconnect(websocket)
         registry.cleanup_game(instance_id)
     except Exception as e:
         handle_error(e, "websocket_loop")
-        game.disconnect(websocket)
+        await game.disconnect(websocket)
         registry.cleanup_game(instance_id)
