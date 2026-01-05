@@ -4,6 +4,7 @@ import Courtroom from './components/Courtroom';
 import CourtOverlay from './components/CourtOverlay';
 import LoadingScreen from './components/LoadingScreen';
 import MobileNotice from './components/MobileNotice';
+import ExternalNotice from './components/ExternalNotice';
 import Onboarding from './components/Onboarding/Onboarding';
 
 import { ErrorHandler } from './utils/errorHandler';
@@ -57,12 +58,12 @@ function App() {
   const [auth, setAuth] = useState<AuthData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('karma_court_onboarded'));
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 600);
   const didAuth = useRef(false);
 
   // Handle Resize for Mobile Check
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    const handleResize = () => setIsMobile(window.innerWidth < 600);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -181,7 +182,12 @@ function App() {
     
     wsUrl = wsUrl.endsWith('/') ? wsUrl.slice(0, -1) : wsUrl;
     const instanceId = discordSdk?.instanceId || 'default';
-    const socket = new WebSocket(`${wsUrl}/ws?user_id=${auth.user.id}&instance_id=${instanceId}`);
+    const channelId = discordSdk?.channelId;
+    
+    let url = `${wsUrl}/ws?user_id=${auth.user.id}&instance_id=${instanceId}`;
+    if (channelId) url += `&channel_id=${channelId}`;
+    
+    const socket = new WebSocket(url);
 
     socket.onopen = () => {};
     socket.onerror = (e) => ErrorHandler.handleWebSocketError(e);
@@ -242,22 +248,14 @@ function App() {
   };
 
   if (!discordSdk || error) {
-    return (
-      <div className="app-container">
-        <h1 className="error-title">🚧 Development Mode 🚧</h1>
-        <p className="error-message">{error || "App running outside Discord."}</p>
-      </div>
-    );
-  }
-
-  if (isMobile) {
-    return <MobileNotice />;
+    return <ExternalNotice error={error} />;
   }
 
   if (!auth) return <LoadingScreen />;
-
+  
   return (
     <>
+      {isMobile && <MobileNotice />}
       {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
       <Courtroom 
         currentUser={auth.user}

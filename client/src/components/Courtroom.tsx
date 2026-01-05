@@ -162,6 +162,15 @@ export default function Courtroom({
     } else {
       playTrack('lobby_theme');
     }
+
+    // Cleanup function to stop music on unmount
+    return () => {
+        if (bgmRef.current) {
+            bgmRef.current.pause();
+            bgmRef.current = null;
+            currentTrackRef.current = null;
+        }
+    };
   }, [gameState.verdict, gameState.accused.username]);
 
   // --- JUDGE ACTIONS ---

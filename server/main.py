@@ -1,20 +1,25 @@
 import os
 import requests
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from typing import List, Dict, Optional
 import json
 import time
+from nacl.signing import VerifyKey
+from nacl.exceptions import BadSignatureError
 from utils.error_handler import handle_error, log_info
 from utils.security import SecurityService
+from utils.discord_bot import bot_client
 
 # 1. Load Secrets
 load_dotenv()
 CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
+DISCORD_PUBLIC_KEY = os.getenv("DISCORD_PUBLIC_KEY")
 
 app = FastAPI()
 
@@ -26,12 +31,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- GAME REGISTRY (GLOBAL) ---
+class GameRegistry:
+    def __init__(self):
+        self._games: Dict[str, 'GameManager'] = {}
+        self.pending_cases: Dict[str, dict] = {} # channel_id -> case_data
+
+    def get_game(self, instance_id: str) -> 'GameManager':
+        if instance_id not in self._games: self._games[instance_id] = GameManager()
+        return self._games[instance_id]
+    
+    def cleanup_game(self, instance_id: str):
+        if instance_id in self._games and not self._games[instance_id].active_connections: del self._games[instance_id]
+
+registry = GameRegistry()
+
 # --- GAME STATE MANAGER ---
 class GameManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
         self.user_map: Dict[WebSocket, str] = {} # Map WS -> user_id
         self._timer_task: Optional[asyncio.Task] = None
+        self.channel_id: Optional[str] = None
         
         # Security: Rate Limiting
         self.last_objection_time = 0
@@ -107,10 +128,27 @@ class GameManager:
             "TRIAL BY FIRE: Must solo-stream a horror game for 1 hour while the squad watches."
         ]
 
-    async def connect(self, websocket: WebSocket, user_id: str):
+    async def connect(self, websocket: WebSocket, user_id: str, channel_id: Optional[str] = None):
         await websocket.accept()
         self.active_connections.append(websocket)
         self.user_map[websocket] = user_id
+        
+        print(f"🔌 Connection: User={user_id} | Channel ID={channel_id}") # Debug Log
+
+        # Load Pending Case from Slash Command
+        if channel_id:
+            self.channel_id = channel_id
+            if channel_id in registry.pending_cases:
+                case = registry.pending_cases.pop(channel_id)
+                self.state["accused"] = case["accused"]
+                self.state["crime"] = case["crime"]
+                self.state["votes"] = {"guilty": 0, "innocent": 0}
+                self.state["voters"] = []
+                self.state["verdict"] = None
+                self._log("OPENING PENDING CASE FILE...", "system")
+                self._log(f"ACCUSED: {self.state['accused']['username']}", "alert")
+                self._start_timer()
+
         if self.state["judge_id"] is None:
             self.state["judge_id"] = user_id
             self._log("The court is now in session. Judge assigned.", "system")
@@ -140,6 +178,8 @@ class GameManager:
                 self._log(f"CONTEMPT OF COURT! {self.state['accused']['username']} fled. AUTOMATIC GUILTY.", "alert")
                 self._log(f"SEVERE SENTENCE: {punishment}", "alert")
                 await self.broadcast({"type": "sound", "sound": "gavel"})
+                if self.channel_id:
+                    bot_client.send_verdict_embed(self.channel_id, self.state)
             await self.broadcast({"type": "update", "data": self.state})
 
     async def broadcast(self, message: dict):
@@ -180,6 +220,11 @@ class GameManager:
         if auto: log_msg += " (Time Expired)"
         self._log(log_msg, "verdict")
         await self.broadcast({"type": "update", "data": self.state})
+        
+        # Trigger Discord Embed
+        # Only send immediately if Innocent (no sentence phase)
+        if self.channel_id and self.state['verdict'] == 'innocent':
+            bot_client.send_verdict_embed(self.channel_id, self.state)
 
     async def handle_message(self, message: dict, user_id: str):
         msg_type = message.get("type")
@@ -211,6 +256,7 @@ class GameManager:
         # 3. Accusing a User
         elif msg_type == "accuse_user":
             if user_id == self.state["judge_id"]:
+                print(f"⚖️ ACTION: Accuse User | Judge: {user_id} | Channel: {self.channel_id}")
                 user_data = message.get("user")
                 self.state["accused"] = user_data
                 self.state["accused"]["id"] = user_data.get("id") 
@@ -223,12 +269,20 @@ class GameManager:
                 self.state["witness"] = {"username": None, "avatar": None}
                 self._log(f"Judge accused {self.state['accused']['username']}!", "alert")
                 self._start_timer()
+                if self.channel_id:
+                    print("📤 Triggering Accusation Embed...")
+                    bot_client.send_case_start_embed(self.channel_id, self.state)
+                else:
+                    print("❌ No Channel ID for Accusation Embed")
 
         # 3.5 Call a Witness
         elif msg_type == "call_witness":
             if user_id == self.state["judge_id"]:
+                print(f"⚖️ ACTION: Call Witness | Judge: {user_id}")
                 self.state["witness"] = message.get("user")
                 self._log(f"Judge called witness {self.state['witness']['username']} to the stand.", "info")
+                if self.channel_id:
+                    bot_client.send_witness_embed(self.channel_id, self.state)
 
         # 4. Calling the Verdict
         elif msg_type == "call_verdict":
@@ -237,11 +291,17 @@ class GameManager:
                 
         # 4.5 Pass Sentence
         elif msg_type == "pass_sentence":
+             print(f"⚖️ ACTION: Pass Sentence | User: {user_id} | Judge: {self.state['judge_id']} | Verdict: {self.state['verdict']}")
              if user_id == self.state["judge_id"] and self.state["verdict"] == "guilty":
                  import random
                  self.state["sentence"] = random.choice(self.sentences_db)
                  self._log(f"SENTENCE PASSED: {self.state['sentence']}", "alert")
                  await self.broadcast({"type": "sound", "sound": "gavel"})
+                 if self.channel_id:
+                     print(f"📤 Triggering Punishment Embed for Channel {self.channel_id}")
+                     bot_client.send_verdict_embed(self.channel_id, self.state)
+                 else:
+                     print("❌ Cannot send Punishment Embed: No Channel ID linked.")
 
         # 5. Next Case
         elif msg_type == "next_case":
@@ -262,6 +322,8 @@ class GameManager:
                 await self.broadcast({"type": "objection_event", "user_id": user_id, "username": username})
                 await self.broadcast({"type": "sound", "sound": "objection"})
                 self._log(f"OBJECTION! by {username}", "objection")
+                if self.channel_id:
+                    bot_client.send_objection_embed(self.channel_id, username)
 
         # 7. Add Evidence
         elif msg_type == "add_evidence":
@@ -274,6 +336,9 @@ class GameManager:
                     self.state["evidence"].append(new_ev)
                     await self.broadcast({"type": "sound", "sound": "evidence"})
                     self._log(f"Evidence submitted by {username}", "evidence")
+                    
+                    if self.channel_id:
+                        bot_client.send_evidence_embed(self.channel_id, new_ev)
                 else:
                     await self.broadcast({"type": "error", "message": "Evidence rejected: Inappropriate content."})
 
@@ -285,16 +350,6 @@ class GameManager:
                 self._log("Evidence removed by Judge moderation.", "system")
 
         await self.broadcast({"type": "update", "data": self.state})
-
-class GameRegistry:
-    def __init__(self): self._games: Dict[str, GameManager] = {}
-    def get_game(self, instance_id: str) -> GameManager:
-        if instance_id not in self._games: self._games[instance_id] = GameManager()
-        return self._games[instance_id]
-    def cleanup_game(self, instance_id: str):
-        if instance_id in self._games and not self._games[instance_id].active_connections: del self._games[instance_id]
-
-registry = GameRegistry()
 
 class TokenRequest(BaseModel):
     code: str
@@ -312,9 +367,9 @@ async def exchange_token(request: TokenRequest):
         raise e
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, user_id: str = "anon", instance_id: str = "default"):
+async def websocket_endpoint(websocket: WebSocket, user_id: str = "anon", instance_id: str = "default", channel_id: Optional[str] = None):
     game = registry.get_game(instance_id)
-    await game.connect(websocket, user_id)
+    await game.connect(websocket, user_id, channel_id)
     try:
         while True:
             data = await websocket.receive_text()
@@ -325,3 +380,77 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = "anon", instan
         handle_error(e, "websocket_loop")
         await game.disconnect(websocket)
     finally: registry.cleanup_game(instance_id)
+
+# --- DISCORD INTERACTIONS (SLASH COMMANDS) ---
+@app.post("/api/interactions")
+async def discord_interaction(request: Request):
+    # 1. Verification
+    signature = request.headers.get("X-Signature-Ed25519")
+    timestamp = request.headers.get("X-Signature-Timestamp")
+    body = await request.body()
+    
+    if not signature or not timestamp or not DISCORD_PUBLIC_KEY:
+        return JSONResponse(status_code=401, content="Invalid Request Signature")
+
+    try:
+        verify_key = VerifyKey(bytes.fromhex(DISCORD_PUBLIC_KEY))
+        verify_key.verify(f'{timestamp}{body.decode("utf-8")}'.encode(), bytes.fromhex(signature))
+    except BadSignatureError:
+        return JSONResponse(status_code=401, content="Invalid Request Signature")
+
+    # 2. Handle Payload
+    data = json.loads(body)
+    type_ = data.get("type")
+
+    # PING
+    if type_ == 1:
+        return JSONResponse({"type": 1})
+
+    # APPLICATION COMMAND
+    if type_ == 2:
+        cmd_name = data.get("data", {}).get("name")
+        channel_id = data.get("channel_id")
+        
+        if cmd_name == "accuse":
+            # Extract Options
+            options = data.get("data", {}).get("options", [])
+            accused_user = None
+            reason = "Unspecified Crimes"
+            
+            for opt in options:
+                if opt["name"] == "user":
+                    user_id = opt["value"]
+                    # Resolve User Object (Discord provides resolved data)
+                    resolved = data.get("data", {}).get("resolved", {}).get("users", {}).get(user_id, {})
+                    accused_user = {
+                        "id": user_id,
+                        "username": resolved.get("username", "Unknown"),
+                        "avatar": resolved.get("avatar")
+                    }
+                elif opt["name"] == "reason":
+                    reason = opt["value"]
+
+            # Store Pending Case
+            if accused_user and channel_id:
+                registry.pending_cases[channel_id] = {
+                    "accused": accused_user,
+                    "crime": reason
+                }
+
+            # Response Embed
+            return JSONResponse({
+                "type": 4, # CHANNEL_MESSAGE_WITH_SOURCE
+                "data": {
+                    "embeds": [{
+                        "title": "🚨 CASE FILED!",
+                        "description": f"**Docket #{int(time.time()) % 10000} is now open.**\nLaunch the Activity to begin the trial immediately.",
+                        "color": 0xFF9900,
+                        "fields": [{"name": "Defendant", "value": f"<@{accused_user['id']}>", "inline": True}, {"name": "Charge", "value": reason, "inline": True}],
+                        "footer": {"text": "Karma Court • Justice Awaits"}
+                    }]
+                }
+            })
+
+    return JSONResponse({"error": "Unknown Command"}, status_code=400)
+
+# --- TOKEN EXCHANGE ---
