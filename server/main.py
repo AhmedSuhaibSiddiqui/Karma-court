@@ -1,3 +1,4 @@
+from fastapi.staticfiles import StaticFiles
 import os
 import requests
 import asyncio
@@ -353,13 +354,10 @@ class GameManager:
 
         await self.broadcast({"type": "update", "data": self.state})
 
+
 class TokenRequest(BaseModel):
     code: str
     redirect_uri: str
-
-@app.get("/")
-async def root():
-    return {"status": "online", "message": "Karma Court Server is running", "version": "1.0.0"}
 
 @app.post("/api/token")
 async def exchange_token(request: TokenRequest):
@@ -459,4 +457,7 @@ async def discord_interaction(request: Request):
 
     return JSONResponse({"error": "Unknown Command"}, status_code=400)
 
-# --- TOKEN EXCHANGE ---
+# Serve React Frontend (MUST BE LAST)
+# Ensure the directory exists or this will error locally if not built.
+if os.path.exists("../client/dist"):
+    app.mount("/", StaticFiles(directory="../client/dist", html=True), name="static")
