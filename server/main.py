@@ -186,9 +186,14 @@ class GameManager:
             await self.broadcast({"type": "update", "data": self.state})
 
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            try: await connection.send_text(json.dumps(message))
-            except Exception as e: handle_error(e, "broadcast")
+        if not self.active_connections: return
+        
+        json_msg = json.dumps(message)
+        async def send(ws):
+            try: await ws.send_text(json_msg)
+            except Exception as e: handle_error(e, "broadcast_one")
+
+        await asyncio.gather(*(send(ws) for ws in self.active_connections))
 
     def _log(self, message: str, type: str = "info"):
         entry = {"message": message, "type": type}
@@ -244,9 +249,10 @@ class GameManager:
         
         # 2. Updating the Crime Text
         elif msg_type == "update_crime":
-            crime_text = message.get("crime", "")[:100]
-            if SecurityService.is_clean(crime_text):
-                self.state["crime"] = SecurityService.sanitize(crime_text)
+            if user_id == self.state["judge_id"]:
+                crime_text = message.get("crime", "")[:100]
+                if SecurityService.is_clean(crime_text):
+                    self.state["crime"] = SecurityService.sanitize(crime_text)
             
         # 2.5 Generate AI Crime
         elif msg_type == "generate_crime":

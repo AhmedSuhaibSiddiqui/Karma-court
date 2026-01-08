@@ -1,8 +1,12 @@
 # ⚖️ Karma Court: Discord Activity
 
-Karma Court is a high-stakes, real-time multiplayer Discord Activity where you can put your friends on trial for their "crimes." From eating the last slice of pizza to being "too lucky" in games, the Judge and the Jury decide the final verdict.
+![Karma Court Splash](client/public/assets/splash.png)
+
+**Karma Court** is a high-stakes, real-time multiplayer Discord Activity where you can put your friends on trial for their "crimes." From eating the last slice of pizza to being "too lucky" in games, the Judge and the Jury decide the final verdict.
 
 Featuring a sleek **Cyber-Justice** aesthetic, interactive "Objection!" mechanics, and a live evidence board.
+
+---
 
 ## 🚀 Features
 
@@ -18,9 +22,34 @@ Featuring a sleek **Cyber-Justice** aesthetic, interactive "Objection!" mechanic
 
 ## 🛠 Tech Stack
 
-- **Frontend:** React, TypeScript, Vite, Framer Motion, Discord Embedded App SDK.
-- **Backend:** Python, FastAPI, WebSockets (with separate GameRegistry).
-- **Styling:** Custom CSS with Cyber-Justice theme.
+- **Frontend:** React 19, TypeScript, Vite, Framer Motion, Discord Embedded App SDK.
+- **Backend:** Python (FastAPI), WebSockets, Uvicorn, PyNaCl.
+- **Styling:** Tailwind CSS v4 (Cyberpunk/Neon theme).
+
+---
+
+## 📂 Project Structure
+
+```
+Karma-court-discord/
+├── client/                 # Frontend React Application
+│   ├── src/
+│   │   ├── components/     # UI Components (Courtroom, Evidence, etc.)
+│   │   ├── context/        # React Context (Feedback/Toast system)
+│   │   ├── hooks/          # Custom Hooks (useAccessibility, etc.)
+│   │   ├── services/       # API & Analytics services
+│   │   ├── types/          # TypeScript definitions
+│   │   └── utils/          # Helper functions
+│   ├── public/             # Static assets (images, sounds)
+│   └── vite.config.ts      # Vite configuration
+│
+└── server/                 # Backend Python Application
+    ├── main.py             # FastAPI entry point & WebSocket logic
+    ├── utils/              # Helper modules (Security, Discord Bot)
+    └── requirements.txt    # Python dependencies
+```
+
+---
 
 ## 📦 Setup Instructions
 
@@ -33,6 +62,7 @@ Featuring a sleek **Cyber-Justice** aesthetic, interactive "Objection!" mechanic
 ```bash
 cd server
 python -m venv venv
+
 # On Windows:
 venv\Scripts\activate
 # On Mac/Linux:
@@ -40,6 +70,7 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 cp sample.env .env  # Add your Discord credentials to .env
+
 # Start the server (Development)
 uvicorn main:app --reload --port 8000
 ```
@@ -59,13 +90,38 @@ cloudflared tunnel --url http://localhost:5173
 ```
 Map the generated URL in your Discord Developer Portal under **Embedded App SDK -> URL Mappings**.
 
-## 🌐 Deployment (Production)
+---
 
-- **Backend:** Deploy `server/` to [Render](https://render.com), [Fly.io](https://fly.io), or AWS.
-  - **Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
-  - **Env Vars:** `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`.
-- **Frontend:** Deploy `client/` to [Vercel](https://vercel.com) or [Netlify](https://netlify.com).
-  - **Env Vars:** `VITE_DISCORD_CLIENT_ID`, `VITE_BACKEND_URL` (set to your deployed backend HTTPS URL).
+## ❓ Troubleshooting
+
+**Q: The activity fails to load in Discord.**
+*   **A:** Ensure your tunnel (cloudflared/ngrok) is running and the URL matches the one in the Discord Developer Portal > Embedded App SDK.
+*   **A:** Check the browser console (Ctrl+Shift+I) for CSP (Content Security Policy) errors.
+
+**Q: WebSockets aren't connecting.**
+*   **A:** Verify the `VITE_BACKEND_URL` in `client/.env` points to your backend server (e.g., `ws://localhost:8000` or your tunnel WSS URL).
+
+**Q: Sounds aren't playing.**
+*   **A:** Browsers block auto-playing audio. Interact with the page (click anywhere) to enable the audio context.
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] **Custom Avatars:** Allow users to upload custom evidence images.
+- [ ] **Voice Integration:** Basic voice modulation for the Judge.
+- [ ] **Spectator Mode:** Better UI for users who join mid-trial.
+- [ ] **Twitch Integration:** Allow stream viewers to vote as the Jury.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository.
+2. Create a new branch: `git checkout -b feature/your-feature-name`.
+3. Commit your changes: `git commit -m 'Add some feature'`.
+4. Push to the branch: `git push origin feature/your-feature-name`.
+5. Open a Pull Request.
 
 ## 📜 License
 

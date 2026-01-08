@@ -3,8 +3,8 @@
   "schema_version": 1,
   "id": "1262230540863049840", 
   "name": "Karma Court",
-  "description": "Settle Discord beef in a high-tech cyberpunk mock trial. Guilty or Innocent? You decide.",
-  "tags": ["Social", "Game", "Multiplayer", "Fun", "Roleplay"],
+  "description": "The court is now in session! Accuse your friends, present evidence, and deliver justice in this high-tech cyberpunk mock trial.",
+  "tags": ["Social", "Game", "Multiplayer", "Fun", "Roleplay", "Casual"],
   
   "//": "--- VISUALS ---",
   "//": "The main image shown before launch (like the Poker Night table)",
