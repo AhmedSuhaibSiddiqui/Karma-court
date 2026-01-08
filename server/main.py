@@ -355,6 +355,10 @@ class TokenRequest(BaseModel):
     code: str
     redirect_uri: str
 
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "Karma Court Server is running", "version": "1.0.0"}
+
 @app.post("/api/token")
 async def exchange_token(request: TokenRequest):
     try:
