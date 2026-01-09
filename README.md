@@ -169,6 +169,6 @@ Contributions are welcome! Please check the `LICENSE` file for details.
 
 ## 📧 Contact
 
-**Team Karma Court** - [GitHub Repository](https://github.com/yourusername/karma-court)
+**Team Karma Court** - [GitHub Repository](https://github.com/AhmedSuhaibSiddiqui/Karma-court)
 
 *Built with ❤️ for the Discord App Buildathon 2026.*
