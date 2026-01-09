@@ -1,128 +1,174 @@
-# ⚖️ Karma Court: Discord Activity
+# ⚖️ Karma Court: The Discord Justice System
 
-![Karma Court Splash](client/public/assets/splash.png)
+![Karma Court Banner](client/public/assets/splash.png)
 
-**Karma Court** is a high-stakes, real-time multiplayer Discord Activity where you can put your friends on trial for their "crimes." From eating the last slice of pizza to being "too lucky" in games, the Judge and the Jury decide the final verdict.
+> **"Order in the court! The chat is now in session."**
 
-Featuring a sleek **Cyber-Justice** aesthetic, interactive "Objection!" mechanics, and a live evidence board.
+**Karma Court** is a real-time, interactive **Discord Activity** that gamifies community conflict resolution. Built for the **Discord Embedded App SDK**, it transforms petty server drama into high-stakes theatrical trials, complete with a judge, jury, evidence board, and automated sentencing.
 
 ---
 
-## 🚀 Features
+## 📋 Table of Contents
+- [Features](#-features)
+- [Architecture & Tech Stack](#-architecture--tech-stack)
+- [Project Structure](#-project-structure)
+- [Getting Started](#-getting-started)
+- [Configuration](#-configuration)
+- [Roadmap](#-roadmap)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-- **Multi-Tenancy:** Supports unlimited concurrent courtroom sessions. Each Discord server/channel gets its own private instance.
-- **Real-time Courtroom:** Built with WebSockets for instant voting and feedback.
-- **Judge & Jury System:** Auto-assigned Judge role with the power to accuse, present evidence, and call the final verdict.
-- **OBJECTION! Mechanic:** Shake the screen and interrupt the court with a giant animated splash.
-- **Evidence Board:** Submit "evidence" (text/notes) that appears as holographic cards on the board.
-- **Court Record:** A scrolling terminal log of every action taken during the session.
-- **Dynamic Feedback:** UI colors shift from Fire (Red/Guilty) to Ice (Blue/Innocent) based on the current vote lead.
-- **Responsive Design:** Optimized for both large desktop windows and narrow Discord mobile/sidebar panels.
-- **Robust Error Handling:** Comprehensive logging and error recovery for network and SDK issues.
+---
 
-## 🛠 Tech Stack
+## ✨ Features
 
-- **Frontend:** React 19, TypeScript, Vite, Framer Motion, Discord Embedded App SDK.
-- **Backend:** Python (FastAPI), WebSockets, Uvicorn, PyNaCl.
-- **Styling:** Tailwind CSS v4 (Cyberpunk/Neon theme).
+- **🌐 Multitenancy:** Designed for scale. Supports unlimited concurrent courtroom sessions, with each Discord server or channel receiving its own isolated game instance.
+- **⚡ Realtime Courtroom:** Built on high-performance WebSockets to ensure every vote, objection, and verdict is synchronized instantly across all clients.
+- **⚖️ Judge and Jury System:** Roles are automatically assigned—one user presides as the Judge while others serve as the Jury, voting on the fate of the Accused.
+- **📌 Evidence Board:** A shared digital canvas where users can submit text-based evidence cards that appear dynamically for all participants to review.
+- **📜 Court Record:** A scrolling terminal-style log that captures every action, from "Objections" to the final sentencing, ensuring a transparent trial history.
+- **🎨 Dynamic Feedback:** The UI reacts to the trial's momentum—shifting colors and animations based on the "Guilty" vs "Innocent" vote balance.
+- **🛡️ Robust Error Handling:** Comprehensive system stability with automatic reconnection strategies and clear user feedback for network or SDK issues.
+- **📢 Discord Embed Integration:** The bot seamlessly posts rich trial summaries (Verdicts and Sentences) directly to the server text chat, creating a permanent hall of fame (or shame) for the community.
+- **🚨 Interactive "OBJECTION!":** A chaotic, rate-limited mechanic allowing any user to interrupt the court with visual and audio feedback.
+- **🏃 Coward's Punishment:** Trying to flee the country? If the Accused user disconnects mid-trial, the system automatically declares them **GUILTY** of Contempt of Court and assigns a "Severe Sentence" immediately.
+- **🤖 AI Crime Generator:** Can't think of an accusation? The system pulls from a curated database of "Discord Crimes" (e.g., *"Ghosting the squad for 3 weeks"*).
+
+### 🎬 Production-Grade UI/UX
+- **Cinematic Transitions:** Powered by `Framer Motion`, every screen transition, evidence reveal, and verdict stamp is smoothly animated.
+- **Dynamic Audio System:** Features an intelligent Music Manager that cross-fades between "Lobby", "Trial", and "Verdict" themes, plus spatial sound effects for gavels and objections.
+- **Anti-Lag Typing:** Implemented local optimistic state updates with debouncing to ensure typing crimes or evidence feels instant, even on slower connections.
+- **Atmospheric Visuals:** The entire courtroom reacts to the trial's state—pulsing with tension when the timer is low and shifting color palettes based on who is winning the vote.
+
+---
+
+## 🛠 Architecture & Tech Stack
+
+The project utilizes a decoupled client-server architecture designed for **multitenancy** and **scalability**.
+
+### **Frontend (Client)**
+- **Framework:** [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- **Build Tool:** [Vite](https://vitejs.dev/)
+- **Integration:** [Discord Embedded App SDK](https://discord.com/developers/docs/activities/overview)
+- **Styling:** Tailwind CSS v4 (Custom "Neon/Cyber" Design System)
+- **State Management:** React Context + Custom Hooks (`useFeedback`, `useAccessibility`)
+
+### **Backend (Server)**
+- **Runtime:** Python 3.10+
+- **API Framework:** [FastAPI](https://fastapi.tiangolo.com/) (Async support)
+- **Real-Time:** Native WebSockets
+- **Security:** `PyNaCl` for Ed25519 signature verification (Discord Interactions)
+- **Protocol:** Custom JSON-based WS protocol for game state payloads (`vote`, `objection`, `sync`)
 
 ---
 
 ## 📂 Project Structure
 
-```
+```bash
 Karma-court-discord/
-├── client/                 # Frontend React Application
+├── client/                 # React Frontend Application
 │   ├── src/
-│   │   ├── components/     # UI Components (Courtroom, Evidence, etc.)
-│   │   ├── context/        # React Context (Feedback/Toast system)
-│   │   ├── hooks/          # Custom Hooks (useAccessibility, etc.)
-│   │   ├── services/       # API & Analytics services
-│   │   ├── types/          # TypeScript definitions
-│   │   └── utils/          # Helper functions
-│   ├── public/             # Static assets (images, sounds)
-│   └── vite.config.ts      # Vite configuration
+│   │   ├── components/     # Atomic UI components (Courtroom, EvidenceCard)
+│   │   ├── context/        # Global state providers
+│   │   ├── services/       # API & WebSocket connectors
+│   │   └── types/          # TypeScript interfaces (Game, User, Evidence)
+│   └── public/assets/      # Static assets (sounds, icons)
 │
-└── server/                 # Backend Python Application
-    ├── main.py             # FastAPI entry point & WebSocket logic
-    ├── utils/              # Helper modules (Security, Discord Bot)
-    └── requirements.txt    # Python dependencies
+└── server/                 # Python FastAPI Backend
+    ├── main.py             # Application entry point & WS routing
+    ├── utils/              # Helper modules (Security, Error Handling)
+    └── requirements.txt    # Backend dependencies
 ```
 
 ---
 
-## 📦 Setup Instructions
+## 🚀 Getting Started
 
-### 1. Discord Developer Portal
-1. Create an application on the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Go to **OAuth2** -> **General** and get your **Client ID** and **Client Secret**.
-3. Go to **Embedded App SDK** and set up your URLs (for local dev, use your tunnel URL).
+Follow these instructions to set up the development environment locally.
 
-### 2. Backend Setup (Server)
+### Prerequisites
+- Node.js v18+ & npm
+- Python 3.10+
+- A Discord App created in the [Developer Portal](https://discord.com/developers/applications)
+
+### 1. Backend Setup
+Initialize the Python server to handle game state and WebSocket connections.
+
 ```bash
 cd server
-python -m venv venv
 
-# On Windows:
+# Create and activate virtual environment
+python -m venv venv
+# Windows:
 venv\Scripts\activate
-# On Mac/Linux:
+# Mac/Linux:
 source venv/bin/activate
 
+# Install dependencies
 pip install -r requirements.txt
-cp sample.env .env  # Add your Discord credentials to .env
 
-# Start the server (Development)
+# Create environment file
+cp sample.env .env
+# Edit .env with your DISCORD_CLIENT_ID and SECRET
+
+# Run the server
 uvicorn main:app --reload --port 8000
 ```
 
-### 3. Frontend Setup (Client)
+### 2. Frontend Setup
+Launch the client application.
+
 ```bash
 cd client
+
+# Install dependencies
 npm install
-cp sample.env .env  # Add your Discord Client ID to .env
+
+# Create environment file
+cp sample.env .env
+# Set VITE_DISCORD_CLIENT_ID in .env
+
+# Start development server
 npm run dev
 ```
 
-### 4. Tunneling (Required for Discord)
-Since Discord Activities require HTTPS, use a tunnel like `cloudflared` or `ngrok`:
+### 3. Tunneling (Crucial for Discord)
+Discord Activities require a secure HTTPS connection. Use a tunneling service to expose your local ports.
+
 ```bash
+# Example using Cloudflared
 cloudflared tunnel --url http://localhost:5173
 ```
-Map the generated URL in your Discord Developer Portal under **Embedded App SDK -> URL Mappings**.
-
----
-
-## ❓ Troubleshooting
-
-**Q: The activity fails to load in Discord.**
-*   **A:** Ensure your tunnel (cloudflared/ngrok) is running and the URL matches the one in the Discord Developer Portal > Embedded App SDK.
-*   **A:** Check the browser console (Ctrl+Shift+I) for CSP (Content Security Policy) errors.
-
-**Q: WebSockets aren't connecting.**
-*   **A:** Verify the `VITE_BACKEND_URL` in `client/.env` points to your backend server (e.g., `ws://localhost:8000` or your tunnel WSS URL).
-
-**Q: Sounds aren't playing.**
-*   **A:** Browsers block auto-playing audio. Interact with the page (click anywhere) to enable the audio context.
+*Note: Copy the generated HTTPS URL to your Discord App's "URL Mappings" in the Developer Portal.*
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] **Custom Avatars:** Allow users to upload custom evidence images.
-- [ ] **Voice Integration:** Basic voice modulation for the Judge.
-- [ ] **Spectator Mode:** Better UI for users who join mid-trial.
-- [ ] **Twitch Integration:** Allow stream viewers to vote as the Jury.
+We are constantly improving the justice system. Future plans include:
+
+- **📊 Persistent User Stats:** A database layer to track "Win/Loss" records for Judges and Attorneys across all servers.
+- **🎭 Custom Avatars:** Allow players to upload custom character sprites to appear in the dock or witness stand.
+- **💰 Economy Integration:** Connect with popular economy bots to allow "Bail" payments or "Fines" using server currency.
+- **🎙️ Voice-to-Text Records:** Automatic transcription of voice channels to generate a searchable court transcript.
+- **📺 Spectator Mode:** A dedicated view for Twitch streamers to broadcast trials with overlay controls for chat voting.
 
 ---
 
 ## 🤝 Contributing
 
+Contributions are welcome! Please check the `LICENSE` file for details.
+
 1. Fork the repository.
-2. Create a new branch: `git checkout -b feature/your-feature-name`.
-3. Commit your changes: `git commit -m 'Add some feature'`.
-4. Push to the branch: `git push origin feature/your-feature-name`.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4. Push to the branch (`git push origin feature/AmazingFeature`).
 5. Open a Pull Request.
 
-## 📜 License
+---
 
-This project is open-source. Feel free to fork, modify, and put your friends on trial!
+## 📧 Contact
+
+**Team Karma Court** - [GitHub Repository](https://github.com/yourusername/karma-court)
+
+*Built with ❤️ for the Discord App Buildathon 2026.*
